@@ -13,6 +13,7 @@ import {
   ScrollView,
   Image,
   Pressable,
+  AppState,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import LottieView from "lottie-react-native";
@@ -45,7 +46,7 @@ const MONTHS = [
   "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
 ];
 
-type AuthState = "splash" | "email" | "pin" | "main";
+type AuthState = "splash" | "email" | "signup" | "pin" | "main";
 type User = {
   id: string;
   name: string;
@@ -142,6 +143,8 @@ function ProfileScreen({
 
   const dateOfBirthStr =
     `${years[yearIndex]}-${String((monthIndex ?? 0) + 1).padStart(2, "0")}-01`;
+
+  const computedAge = ageFromYearMonth(years[yearIndex], (monthIndex ?? 0) + 1);
 
   const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -405,12 +408,12 @@ const TAB_THEMES: Record<TabId, { bg: string; color: string; border: string; sha
   },
 };
 
-const TABS: { id: TabId; label: string; icon: keyof typeof Ionicons.glyphMap; emoji: string }[] = [
-  { id: "moment", label: "لحظة", icon: "flash", emoji: "⚡" },
-  { id: "messages", label: "رسائل", icon: "chatbubbles", emoji: "💬" },
-  { id: "club", label: "نادي", icon: "people", emoji: "🎯" },
-  { id: "home", label: "الرئيسية", icon: "home", emoji: "🏠" },
-  { id: "me", label: "أنا", icon: "person", emoji: "👤" },
+const TABS: { id: TabId; label: string; emoji: string }[] = [
+  { id: "moment", label: "لحظة", emoji: "✨" },
+  { id: "messages", label: "رسائل", emoji: "💬" },
+  { id: "club", label: "نادي", emoji: "🎯" },
+  { id: "home", label: "الرئيسية", emoji: "🏠" },
+  { id: "me", label: "أنا", emoji: "😊" },
 ];
 
 function TabIcon({
@@ -423,7 +426,6 @@ function TabIcon({
   onPress: () => void;
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const theme = TAB_THEMES[tab.id];
 
@@ -461,12 +463,12 @@ function TabIcon({
         ]}
       >
         {active && (
-          <Animated.View
+          <View
             style={[
               styles.tabGlow,
               {
                 backgroundColor: theme.shadow,
-                opacity: glowAnim,
+                opacity: 0.45,
               },
             ]}
           />
@@ -476,19 +478,19 @@ function TabIcon({
             styles.tabIconBubble,
             active && {
               backgroundColor: theme.border,
-              borderColor: theme.border,
+              borderColor: "rgba(255,255,255,0.5)",
+              borderWidth: 1.5,
               shadowColor: theme.shadow,
               shadowOpacity: 0.8,
-              shadowRadius: 12,
-              elevation: 8,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 6,
             },
           ]}
         >
-          <Ionicons
-            name={active ? tab.icon : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)}
-            size={24}
-            color={active ? "#FFFFFF" : TEXT_MUTED}
-          />
+          <Text style={[styles.tabEmoji, !active && styles.tabEmojiInactive]}>
+            {tab.emoji}
+          </Text>
         </View>
         <Text
           style={[
@@ -547,6 +549,7 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [pinFromSignup, setPinFromSignup] = useState(false);
   const [user, setUser] = useState<User>(null);
   const [authResult, setAuthResult] = useState<Awaited<ReturnType<typeof checkAuthStatus>> | null>(null);
   const [splashDone, setSplashDone] = useState(false);
@@ -584,9 +587,9 @@ export default function Page() {
     }
   }, [splashDone, authResult]);
 
-  // ——— عند ظهور شاشة البريد: تحقق إضافي (مثلاً إذا رجع من الشاشة الرئيسية) ———
+  // ——— عند ظهور شاشة البريد أو التسجيل: تحقق إضافي ———
   useEffect(() => {
-    if (authState !== "email") return;
+    if (authState !== "email" && authState !== "signup") return;
     let cancelled = false;
     checkAuthStatus().then((r) => {
       if (cancelled) return;
@@ -597,6 +600,33 @@ export default function Page() {
     });
     return () => { cancelled = true; };
   }, [authState]);
+
+  // ——— إعادة التحقق عند العودة للتطبيق أو بشكل دوري: إذا حُذف المستخدم من الداتابيس يُعاد لتسجيل الدخول ———
+  useEffect(() => {
+    if (authState !== "main" || !user) return;
+
+    const verifySession = () => {
+      checkAuthStatus().then((r) => {
+        if (!r.authenticated || !r.user) {
+          setUser(null);
+          setAuthState("email");
+        } else if (r.user) {
+          setUser(r.user as User);
+        }
+      });
+    };
+
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") verifySession();
+    });
+
+    const interval = setInterval(verifySession, 45000);
+
+    return () => {
+      sub.remove();
+      clearInterval(interval);
+    };
+  }, [authState, user]);
 
   const requestPin = useCallback(async () => {
     const trimmed = email.trim().toLowerCase();
@@ -613,6 +643,67 @@ export default function Page() {
     setSuccessMsg("");
     setLoading(true);
     try {
+      const checkRes = await axios.post(
+        `${API_BASE_URL}/api/auth/check-email`,
+        { email: trimmed },
+        { timeout: 8000 }
+      );
+      if (!checkRes.data?.exists) {
+        setError("البريد غير مسجّل. قم بالتسجيل أولاً");
+        setLoading(false);
+        return;
+      }
+      const res = await axios.post(
+        `${API_BASE_URL}/api/auth/request-pin`,
+        { email: trimmed, mode: "login" },
+        { timeout: 12000 }
+      );
+      if (res.data?.success) {
+        setEmail(trimmed);
+        setSuccessMsg("تم إرسال الكود إلى بريدك");
+        setPinFromSignup(false);
+        setAuthState("pin");
+        setPin(["", "", "", "", "", ""]);
+        setTimeout(() => pinRefs.current[0]?.focus(), 300);
+      } else {
+        setError(res.data?.message || "فشل إرسال الكود");
+      }
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err as Error)?.message ||
+        "تحقق من الاتصال وحاول مرة أخرى";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [email]);
+
+  const requestPinSignup = useCallback(async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) {
+      setError("أدخل بريدك الإلكتروني أو Gmail");
+      return;
+    }
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!re.test(trimmed)) {
+      setError("أدخل بريداً إلكترونياً صحيحاً");
+      return;
+    }
+    setError("");
+    setSuccessMsg("");
+    setLoading(true);
+    try {
+      const checkRes = await axios.post(
+        `${API_BASE_URL}/api/auth/check-email`,
+        { email: trimmed },
+        { timeout: 8000 }
+      );
+      if (checkRes.data?.exists) {
+        setError("البريد مسجّل مسبقاً. سجّل دخولك");
+        setLoading(false);
+        return;
+      }
       const res = await axios.post(
         `${API_BASE_URL}/api/auth/request-pin`,
         { email: trimmed },
@@ -620,7 +711,8 @@ export default function Page() {
       );
       if (res.data?.success) {
         setEmail(trimmed);
-        setSuccessMsg("تم إرسال الكود إلى بريدك");
+        setSuccessMsg("تم إرسال كود التفعيل إلى بريدك");
+        setPinFromSignup(true);
         setAuthState("pin");
         setPin(["", "", "", "", "", ""]);
         setTimeout(() => pinRefs.current[0]?.focus(), 300);
@@ -700,9 +792,11 @@ export default function Page() {
     setError("");
     setLoading(true);
     try {
+      const body: { email: string; mode?: string } = { email: email.trim().toLowerCase() };
+      if (!pinFromSignup) body.mode = "login";
       const res = await axios.post(
         `${API_BASE_URL}/api/auth/request-pin`,
-        { email: email.trim().toLowerCase() },
+        body,
         { timeout: 12000 }
       );
       if (res.data?.success) {
@@ -717,7 +811,7 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [email]);
+  }, [email, pinFromSignup]);
 
   // ——— شاشة البداية (Splash) ———
   if (authState === "splash") {
@@ -755,8 +849,9 @@ export default function Page() {
     );
   }
 
-  // ——— تسجيل الدخول: البريد ثم الكود ———
+  // ——— تسجيل الدخول / التسجيل: البريد ثم الكود ———
   const isPinStep = authState === "pin";
+  const isSignup = authState === "signup";
 
   return (
     <KeyboardAvoidingView
@@ -764,58 +859,75 @@ export default function Page() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
     >
-      <View style={styles.loginInner}>
-        {/* أنيميشن صندوق الكنز فوق النموذج */}
-        <View style={styles.lottieWrap}>
-          <LottieView
-            source={require("../assets/images/3D Treasure Box (1).json")}
-            autoPlay
-            loop
-            style={styles.loginLottie}
-          />
-        </View>
+      <ScrollView
+        style={styles.loginScroll}
+        contentContainerStyle={styles.loginScrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.loginInner}>
+          {/* أنيميشن صندوق الكنز فوق النموذج */}
+          <View style={styles.lottieWrap}>
+            <LottieView
+              source={require("../assets/images/3D Treasure Box (1).json")}
+              autoPlay
+              loop
+              style={styles.loginLottie}
+            />
+          </View>
 
-        <View style={styles.loginHeader}>
-          <Text style={styles.loginTitle}>
-            {isPinStep ? "أدخل الكود" : "تسجيل الدخول"}
-          </Text>
-          <Text style={styles.loginSub}>
-            {isPinStep
-              ? `تم إرسال كود مكوّن من 6 أرقام إلى ${email}`
-              : "أدخل بريدك الإلكتروني أو Gmail وسنرسل لك كوداً للدخول"}
-          </Text>
-        </View>
+          <View style={styles.loginHeader}>
+            <Text style={styles.loginTitle}>
+              {isPinStep ? "أدخل الكود" : isSignup ? "إنشاء حساب" : "تسجيل الدخول"}
+            </Text>
+            <Text style={styles.loginSub}>
+              {isPinStep
+                ? `تم إرسال كود مكوّن من 6 أرقام إلى ${email}`
+                : isSignup
+                  ? "أدخل بريدك الإلكتروني وسنرسل لك كوداً لتفعيل حسابك"
+                  : "أدخل بريدك الإلكتروني المسجّل وسنرسل لك كوداً للدخول"}
+            </Text>
+          </View>
 
-        {/* محتوى بدون كارت — إطار ذهبي فقط */}
-        <View style={styles.goldFrame}>
-          {!isPinStep ? (
-            <>
-              <Text style={styles.label}>البريد الإلكتروني</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="example@gmail.com"
-                placeholderTextColor={TEXT_MUTED}
-                value={email}
-                onChangeText={(t) => { setEmail(t); setError(""); }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-              />
-              <TouchableOpacity
-                style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
-                onPress={requestPin}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#0d1b2a" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>إرسال الكود</Text>
-                )}
-              </TouchableOpacity>
-            </>
-          ) : (
+          {/* محتوى بدون كارت — إطار ذهبي فقط */}
+          <View style={styles.goldFrame}>
+            {!isPinStep ? (
+              <>
+                <Text style={styles.label}>البريد الإلكتروني</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="example@gmail.com"
+                  placeholderTextColor={TEXT_MUTED}
+                  value={email}
+                  onChangeText={(t) => { setEmail(t); setError(""); }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!loading}
+                />
+                <TouchableOpacity
+                  style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
+                  onPress={isSignup ? requestPinSignup : requestPin}
+                  disabled={loading}
+                  activeOpacity={0.85}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#0d1b2a" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>{isSignup ? "إرسال كود التفعيل" : "إرسال الكود"}</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.switchAuthBtn}
+                  onPress={() => { setAuthState(isSignup ? "email" : "signup"); setError(""); setSuccessMsg(""); }}
+                  disabled={loading}
+                >
+                  <Text style={styles.switchAuthText}>
+                    {isSignup ? "لديك حساب؟ سجّل دخولك" : "ليس لديك حساب؟ قم بالتسجيل"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
             <>
               <View style={styles.pinRow}>
                 {pin.map((digit, i) => (
@@ -854,7 +966,7 @@ export default function Page() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.backBtn}
-                onPress={() => { setAuthState("email"); setError(""); setSuccessMsg(""); }}
+                onPress={() => { setAuthState(pinFromSignup ? "signup" : "email"); setError(""); setSuccessMsg(""); }}
                 disabled={loading}
               >
                 <Text style={styles.backBtnText}>تغيير البريد</Text>
@@ -866,6 +978,7 @@ export default function Page() {
           {successMsg ? <Text style={styles.successText}>{successMsg}</Text> : null}
         </View>
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -892,6 +1005,13 @@ const styles = StyleSheet.create({
   loginContainer: {
     flex: 1,
     backgroundColor: PURPLE_DARK,
+  },
+  loginScroll: {
+    flex: 1,
+  },
+  loginScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 40,
   },
   loginInner: {
     flex: 1,
@@ -960,6 +1080,16 @@ const styles = StyleSheet.create({
     color: PURPLE_DARK,
     fontSize: 14,
     fontWeight: "600",
+  },
+  switchAuthBtn: {
+    marginTop: 16,
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  switchAuthText: {
+    fontSize: 13,
+    color: ACCENT_SOFT,
+    fontWeight: "500",
   },
   pinRow: {
     flexDirection: "row",
@@ -1175,12 +1305,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-around",
     paddingVertical: 4,
-    paddingHorizontal: 14,
-    paddingBottom:1,
-    marginHorizontal: 14,
-    marginBottom: Platform.OS === "ios" ? 0 : 43,
+    paddingHorizontal: 6,
+    paddingBottom: Platform.OS === "ios" ? 8 : 6,
+    marginHorizontal: 12,
+    marginBottom: Platform.OS === "ios" ? 0 : 40,
     backgroundColor: CARD_BG,
-    borderRadius: 24,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: BORDER_SOFT,
   },
@@ -1188,7 +1318,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: -6,
+    paddingVertical: -4,
   },
   tabIconWrap: {
     alignItems: "center",
@@ -1197,33 +1327,39 @@ const styles = StyleSheet.create({
   },
   tabGlow: {
     position: "absolute",
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    top: -4,
+    width: 44,
+    height: 36,
+    borderRadius: 22,
+    top: -2,
     zIndex: -1,
   },
   tabIconBubble: {
-    width: 28,
-    height: 28,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: "transparent",
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
+  },
+  tabEmoji: {
+    fontSize: 18,
+  },
+  tabEmojiInactive: {
+    opacity: 0.6,
   },
   tabDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    marginTop: 4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 2,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: TEXT_MUTED,
     fontWeight: "500",
-    marginTop: 4,
-  },
+    marginTop: 2,
+ },
 });
