@@ -373,12 +373,45 @@ function ProfileScreen({
 
 type TabId = "home" | "me" | "messages" | "club" | "moment";
 
-const TABS: { id: TabId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: "moment", label: "لحظة", icon: "sparkles" },
-  { id: "messages", label: "رسائل", icon: "chatbubble-ellipses" },
-  { id: "club", label: "نادي", icon: "globe" },
-  { id: "home", label: "الرئيسية", icon: "home" },
-  { id: "me", label: "أنا", icon: "person" },
+const TAB_THEMES: Record<TabId, { bg: string; color: string; border: string; shadow: string }> = {
+  moment: {
+    bg: "linear-gradient(135deg, #FFD700 0%, #FFA500 100%)",
+    color: "#FF6B00",
+    border: "#FFD700",
+    shadow: "#FFD700",
+  },
+  messages: {
+    bg: "linear-gradient(135deg, #00D4FF 0%, #5B7FFF 100%)",
+    color: "#0066FF",
+    border: "#00D4FF",
+    shadow: "#00D4FF",
+  },
+  club: {
+    bg: "linear-gradient(135deg, #00FF87 0%, #00D68F 100%)",
+    color: "#00B377",
+    border: "#00FF87",
+    shadow: "#00FF87",
+  },
+  home: {
+    bg: "linear-gradient(135deg, #FF6B9D 0%, #FF3D7F 100%)",
+    color: "#FF1F6B",
+    border: "#FF6B9D",
+    shadow: "#FF6B9D",
+  },
+  me: {
+    bg: "linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)",
+    color: "#8B5CF6",
+    border: "#A855F7",
+    shadow: "#A855F7",
+  },
+};
+
+const TABS: { id: TabId; label: string; icon: keyof typeof Ionicons.glyphMap; emoji: string }[] = [
+  { id: "moment", label: "لحظة", icon: "flash", emoji: "⚡" },
+  { id: "messages", label: "رسائل", icon: "chatbubbles", emoji: "💬" },
+  { id: "club", label: "نادي", icon: "people", emoji: "🎯" },
+  { id: "home", label: "الرئيسية", icon: "home", emoji: "🏠" },
+  { id: "me", label: "أنا", icon: "person", emoji: "👤" },
 ];
 
 function TabIcon({
@@ -391,12 +424,41 @@ function TabIcon({
   onPress: () => void;
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const theme = TAB_THEMES[tab.id];
+
   const handlePressIn = useCallback(() => {
-    Animated.spring(scaleAnim, { toValue: 0.9, useNativeDriver: true }).start();
-  }, [scaleAnim]);
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 0.8, useNativeDriver: true }),
+      Animated.timing(rotateAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+    ]).start();
+  }, [scaleAnim, rotateAnim]);
+
   const handlePressOut = useCallback(() => {
-    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, friction: 4 }).start();
-  }, [scaleAnim]);
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, friction: 3, tension: 200 }),
+      Animated.timing(rotateAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+    ]).start();
+  }, [scaleAnim, rotateAnim]);
+
+  useEffect(() => {
+    if (active) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, { toValue: 1, duration: 800, useNativeDriver: false }),
+          Animated.timing(glowAnim, { toValue: 0.5, duration: 800, useNativeDriver: false }),
+        ])
+      ).start();
+    } else {
+      glowAnim.setValue(0);
+    }
+  }, [active, glowAnim]);
+
+  const rotation = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "-8deg"],
+  });
 
   return (
     <Pressable
@@ -405,13 +467,51 @@ function TabIcon({
       onPressOut={handlePressOut}
       style={styles.tabItem}
     >
-      <Animated.View style={[styles.tabIconWrap, { transform: [{ scale: scaleAnim }] }]}>
-        <Ionicons
-          name={active ? tab.icon : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)}
-          size={22}
-          color={active ? ACCENT_SOFT : TEXT_MUTED}
-        />
-        <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text>
+      <Animated.View
+        style={[
+          styles.tabIconWrap,
+          { transform: [{ scale: scaleAnim }, { rotate: rotation }] },
+        ]}
+      >
+        {active && (
+          <Animated.View
+            style={[
+              styles.tabGlow,
+              {
+                backgroundColor: theme.shadow,
+                opacity: glowAnim,
+              },
+            ]}
+          />
+        )}
+        <View
+          style={[
+            styles.tabIconBubble,
+            active && {
+              backgroundColor: theme.border,
+              borderColor: theme.border,
+              shadowColor: theme.shadow,
+              shadowOpacity: 0.8,
+              shadowRadius: 12,
+              elevation: 8,
+            },
+          ]}
+        >
+          <Ionicons
+            name={active ? tab.icon : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)}
+            size={24}
+            color={active ? "#FFFFFF" : TEXT_MUTED}
+          />
+        </View>
+        <Text
+          style={[
+            styles.tabLabel,
+            active && { color: theme.color, fontWeight: "800" },
+          ]}
+        >
+          {tab.label}
+        </Text>
+        {active && <View style={[styles.tabDot, { backgroundColor: theme.color }]} />}
       </Animated.View>
     </Pressable>
   );
@@ -1101,20 +1201,42 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 6,
+    paddingVertical: -6,
   },
   tabIconWrap: {
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
+  },
+  tabGlow: {
+    position: "absolute",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    top: -4,
+    zIndex: -1,
+  },
+  tabIconBubble: {
+    width: 28,
+    height: 28,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 2,
+    borderColor: "transparent",
+    shadowOffset: { width: 0, height: 4 },
+  },
+  tabDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    marginTop: 4,
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: TEXT_MUTED,
     fontWeight: "500",
-    marginTop: 1,
-  },
-  tabLabelActive: {
-    color: ACCENT_SOFT,
-    fontWeight: "600",
+    marginTop: 4,
   },
 });
