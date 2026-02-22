@@ -25,6 +25,7 @@ import { checkAuthStatus, API_BASE_URL } from "../utils/authHelper";
 import { getFlagEmoji, getCountryName } from "../utils/countries";
 import HomeScreen from "./screens/HomeScreen";
 import MeScreen from "./screens/MeScreen";
+import InfoScreen from "./screens/InfoScreen";
 import MessagesScreen from "./screens/MessagesScreen";
 import ClubScreen from "./screens/ClubScreen";
 import MomentScreen from "./screens/MomentScreen";
@@ -382,11 +383,11 @@ const TAB_THEMES: Record<TabId, { bg: string; color: string; border: string; sha
     border: "#FFD700",
     shadow: "#FFD700",
   },
-  messages: {
-    bg: "linear-gradient(135deg, #00D4FF 0%, #5B7FFF 100%)",
-    color: "#0066FF",
-    border: "#00D4FF",
-    shadow: "#00D4FF",
+  home: {
+    bg: "linear-gradient(135deg, #FF6B9D 0%, #FF3D7F 100%)",
+    color: "#FF1F6B",
+    border: "#FF6B9D",
+    shadow: "#FF6B9D",
   },
   club: {
     bg: "linear-gradient(135deg, #00FF87 0%, #00D68F 100%)",
@@ -394,12 +395,14 @@ const TAB_THEMES: Record<TabId, { bg: string; color: string; border: string; sha
     border: "#00FF87",
     shadow: "#00FF87",
   },
-  home: {
-    bg: "linear-gradient(135deg, #FF6B9D 0%, #FF3D7F 100%)",
-    color: "#FF1F6B",
-    border: "#FF6B9D",
-    shadow: "#FF6B9D",
+
+    messages: {
+    bg: "linear-gradient(135deg, #00D4FF 0%, #5B7FFF 100%)",
+    color: "#0066FF",
+    border: "#00D4FF",
+    shadow: "#00D4FF",
   },
+
   me: {
     bg: "linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)",
     color: "#8B5CF6",
@@ -409,10 +412,11 @@ const TAB_THEMES: Record<TabId, { bg: string; color: string; border: string; sha
 };
 
 const TABS: { id: TabId; label: string; emoji: string }[] = [
-  { id: "moment", label: "لحظة", emoji: "✨" },
-  { id: "messages", label: "رسائل", emoji: "💬" },
-  { id: "club", label: "نادي", emoji: "🎯" },
+  
   { id: "home", label: "الرئيسية", emoji: "🏠" },
+  { id: "moment", label: "لحظة", emoji: "✨" },
+  { id: "club", label: "نادي", emoji: "🎯" },
+   { id: "messages", label: "رسائل", emoji: "💬" },
   { id: "me", label: "أنا", emoji: "😊" },
 ];
 
@@ -509,9 +513,11 @@ function TabIcon({
 function MainTabsScreen({
   user,
   onEditProfile,
+  onOpenInfoPage,
 }: {
   user: NonNullable<User>;
   onEditProfile: () => void;
+  onOpenInfoPage: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("home");
 
@@ -522,11 +528,15 @@ function MainTabsScreen({
           <HomeScreen userName={user.name || ""} onNavigate={(t) => setActiveTab(t as TabId)} />
         )}
         {activeTab === "me" && (
-          <MeScreen user={user} onEditProfile={onEditProfile} />
+          <MeScreen
+            user={user}
+            onEditProfile={onEditProfile}
+            onOpenInfoPage={onOpenInfoPage}
+          />
         )}
         {activeTab === "messages" && <MessagesScreen />}
         {activeTab === "club" && <ClubScreen />}
-        {activeTab === "moment" && <MomentScreen />}
+        {activeTab === "moment" && <MomentScreen user={user} />}
       </View>
       <View style={styles.tabBar}>
         {TABS.map((tab) => (
@@ -554,6 +564,7 @@ export default function Page() {
   const [authResult, setAuthResult] = useState<Awaited<ReturnType<typeof checkAuthStatus>> | null>(null);
   const [splashDone, setSplashDone] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [showInfoPage, setShowInfoPage] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const pinRefs = useRef<(TextInput | null)[]>([]);
@@ -841,10 +852,19 @@ export default function Page() {
         />
       );
     }
+    if (showInfoPage) {
+      return (
+        <InfoScreen
+          user={user}
+          onBack={() => setShowInfoPage(false)}
+        />
+      );
+    }
     return (
       <MainTabsScreen
         user={user}
         onEditProfile={() => setShowProfileEdit(true)}
+        onOpenInfoPage={() => setShowInfoPage(true)}
       />
     );
   }
