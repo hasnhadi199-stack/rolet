@@ -67,9 +67,10 @@ type Props = {
   };
   onEditProfile: () => void;
   onOpenInfoPage: () => void;
+  onLogout: () => void;
 };
 
-export default function MeScreen({ user, onEditProfile, onOpenInfoPage }: Props) {
+export default function MeScreen({ user, onEditProfile, onOpenInfoPage, onLogout }: Props) {
   const deviceCountry = getDeviceCountryCode();
   const countryCode = user.country || deviceCountry || "";
   const flag = getFlagEmoji(countryCode);
@@ -91,6 +92,21 @@ export default function MeScreen({ user, onEditProfile, onOpenInfoPage }: Props)
     await Clipboard.setStringAsync(String(userId));
     Alert.alert("تم النسخ", "تم نسخ المعرف بنجاح");
   }, [userId]);
+
+  const handleLogout = useCallback(() => {
+    Alert.alert(
+      "تسجيل الخروج",
+      "هل أنت متأكد من تسجيل الخروج؟",
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "تسجيل الخروج",
+          style: "destructive",
+          onPress: onLogout,
+        },
+      ]
+    );
+  }, [onLogout]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -197,8 +213,6 @@ export default function MeScreen({ user, onEditProfile, onOpenInfoPage }: Props)
             { title: "زواري", icon: "people" },
             { title: "كيفية استخدام men", icon: "help-circle" },
             { title: "إعدادات", icon: "settings" },
-             // القسم الجديد
-
           ].map((item, index) => (
             <TouchableOpacity key={index} style={styles.newSectionCard}>
               <View style={styles.newSectionRow}>
@@ -213,6 +227,20 @@ export default function MeScreen({ user, onEditProfile, onOpenInfoPage }: Props)
               </View>
             </TouchableOpacity>
           ))}
+
+          {/* زر تسجيل الخروج */}
+          <TouchableOpacity style={styles.logoutCard} onPress={handleLogout} activeOpacity={0.8}>
+            <View style={styles.newSectionRow}>
+              <Ionicons name="log-out-outline" size={22} color="#f87171" />
+              <Text style={styles.logoutText}>تسجيل الخروج</Text>
+              <Ionicons
+                name="chevron-forward-outline"
+                size={20}
+                color="#f87171"
+                style={{ marginLeft: "auto" }}
+              />
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
     </ScrollView>
@@ -382,5 +410,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: TEXT_LIGHT,
+  },
+
+  logoutCard: {
+    backgroundColor: "rgba(248, 113, 113, 0.12)",
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "rgba(248, 113, 113, 0.25)",
+    marginTop: 10,
+  },
+
+  logoutText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#f87171",
   },
 });

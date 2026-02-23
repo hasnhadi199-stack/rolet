@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Modal,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -21,6 +23,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { getFlagEmoji, getCountryName } from "../../utils/countries";
 import { API_BASE_URL } from "../../utils/authHelper";
+import { fetchMoments, deleteMoment, type Moment } from "../../utils/momentsApi";
+import { Video, ResizeMode } from "expo-av";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SLIDER_HEIGHT = 320;
@@ -137,6 +141,12 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [moments, setMoments] = useState<Moment[]>([]);
+  const [momentsLoading, setMomentsLoading] = useState(false);
+  const [momentsError, setMomentsError] = useState<string | null>(null);
+  const [videoModal, setVideoModal] = useState<Moment | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const user = profile || userProp;
   const countryCode = user.country || deviceCountry || "";
@@ -146,6 +156,7 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
   const userId = user.id || user.email?.split("@")[0] || "—";
 
   const scrollRef = useRef<ScrollView>(null);
+  const videoRef = useRef<Video>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<"info" | "moment">("info");
   const photos = user.profileImage ? [user.profileImage] : [];
@@ -194,18 +205,89 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
       if (res.data?.success && res.data?.user) {
         setProfile(res.data.user as UserProfile);
       }
-    } catch (e) {
-      setError((e as Error)?.message || "تعذر جلب البيانات");
-      setProfile(userProp);
+    } catch (e: any) {
+      const status = e?.response?.status;
+      if (status === 404) {
+        setProfile(userProp);
+      } else {
+        setError(e?.message || "تعذر جلب البيانات");
+        setProfile(userProp);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [userProp]);
 
+  const loadMyMoments = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setMomentsLoading(true);
+      setMomentsError(null);
+      try {
+        const list = await fetchMoments();
+        const baseId = user.id || user.email?.split("@")[0] || "";
+        const mine = list.filter((m) => m.userId === baseId);
+        setMoments(mine);
+      } catch (e: any) {
+        setMomentsError(e?.message || "تعذر جلب لحظاتك");
+        setMoments([]);
+      } finally {
+        setMomentsLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [user]
+  );
+
+  const openVideo = useCallback((moment: Moment) => {
+    if (moment.mediaType !== "video") return;
+    setVideoError(null);
+    setVideoLoading(true);
+    setVideoModal(moment);
+  }, []);
+
+  const closeVideo = useCallback(() => {
+    setVideoModal(null);
+    setVideoLoading(false);
+    setVideoError(null);
+  }, []);
+
+  const handleDeleteMoment = useCallback(
+    async (moment: Moment) => {
+      Alert.alert(
+        "حذف اللحظة",
+        "هل تريد حذف هذه اللحظة؟",
+        [
+          { text: "إلغاء", style: "cancel" },
+          {
+            text: "حذف",
+            style: "destructive",
+            onPress: async () => {
+              const ok = await deleteMoment(moment.id);
+              if (ok) {
+                setMoments((prev) => prev.filter((m) => m.id !== moment.id));
+                if (videoModal?.id === moment.id) closeVideo();
+              } else {
+                Alert.alert("خطأ", "تعذر الحذف");
+              }
+            },
+          },
+        ]
+      );
+    },
+    [closeVideo, videoModal]
+  );
+
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
+
+  useEffect(() => {
+    if (activeTab === "moment") {
+      loadMyMoments();
+    }
+  }, [activeTab, loadMyMoments]);
 
   const onScrollSlider = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = e.nativeEvent.contentOffset.x;
@@ -305,19 +387,87 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          activeTab === "info" ? (
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => fetchProfile(true)}
-              tintColor={ACCENT_SOFT}
-            />
-          ) : undefined
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              if (activeTab === "info") fetchProfile(true);
+              else loadMyMoments(true);
+            }}
+            tintColor={ACCENT_SOFT}
+          />
         }
       >
         {activeTab === "moment" ? (
           <View style={styles.momentContent}>
-            <Text style={styles.momentTitle}>لحظة</Text>
-            <Text style={styles.momentSubtitle}>لحظاتك تظهر هنا</Text>
+            <Text style={styles.momentTitle}>لحظاتي</Text>
+            <Text style={styles.momentSubtitle}>كل اللحظات التي قمت بنشرها من صفحة اللحظات تظهر هنا.</Text>
+
+            {momentsLoading ? (
+              <View style={styles.momentLoadingWrap}>
+                <ActivityIndicator size="large" color={ACCENT_SOFT} />
+                <Text style={styles.loadingText}>جاري جلب لحظاتك...</Text>
+              </View>
+            ) : momentsError ? (
+              <View style={styles.momentErrorWrap}>
+                <Ionicons name="alert-circle-outline" size={20} color={TEXT_MUTED} />
+                <Text style={styles.errorText}>{momentsError}</Text>
+              </View>
+            ) : moments.length === 0 ? (
+              <View style={styles.momentEmptyWrap}>
+                <Ionicons name="images-outline" size={42} color={TEXT_MUTED} />
+                <Text style={styles.momentEmptyTitle}>لا توجد لحظات بعد</Text>
+                <Text style={styles.momentEmptySub}>
+                  قم بنشر أول لحظة من صفحة اللحظات، وستظهر هنا تلقائيًا.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.momentList}>
+                {moments.map((m) => (
+                  <View key={m.id} style={[styles.momentCard, CARD_SHADOW]}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => (m.mediaType === "video" ? openVideo(m) : null)}
+                    >
+                      <View style={styles.momentMediaWrap}>
+                        <Image
+                          source={{ uri: m.thumbnailUrl || m.mediaUrl }}
+                          style={styles.momentImage}
+                          resizeMode="cover"
+                        />
+                        {m.mediaType === "video" && (
+                          <View style={styles.momentPlayOverlay}>
+                            <Ionicons name="play-circle" size={40} color="rgba(255,255,255,0.95)" />
+                          </View>
+                        )}
+                        <TouchableOpacity
+                          style={styles.momentDeleteBtn}
+                          activeOpacity={0.7}
+                          onPress={() => handleDeleteMoment(m)}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#f87171" />
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                    <View style={styles.momentInfoRow}>
+                      <View>
+                        <Text style={styles.momentInfoTitle} numberOfLines={1}>
+                          {user.name || "أنا"}
+                        </Text>
+                        {!!m.createdAt && (
+                          <Text style={styles.momentInfoMeta}>
+                            {new Date(m.createdAt).toLocaleString()}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.momentLikesRow}>
+                        <Ionicons name="thumbs-up" size={18} color={ACCENT_SOFT} />
+                        <Text style={styles.momentLikesText}>{m.likeCount}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         ) : loading && !profile ? (
           <View style={styles.loadingWrap}>
@@ -387,6 +537,55 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
           </View>
         )}
       </ScrollView>
+
+      {/* مشغل الفيديو للحظات المستخدم */}
+      <Modal
+        visible={!!videoModal}
+        animationType="fade"
+        transparent
+        onRequestClose={closeVideo}
+      >
+        <Pressable style={styles.videoModalOverlay} onPress={closeVideo}>
+          <View style={styles.videoModalContent}>
+            {videoModal && (
+              <Pressable onPress={(e) => e.stopPropagation()} style={styles.videoContainer}>
+                {videoLoading && (
+                  <View style={styles.videoLoadingOverlay}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={styles.videoLoadingText}>جاري تحميل الفيديو...</Text>
+                  </View>
+                )}
+                {videoError ? (
+                  <View style={styles.videoErrorWrap}>
+                    <Ionicons name="alert-circle-outline" size={48} color="#f87171" />
+                    <Text style={styles.videoErrorText}>{videoError}</Text>
+                  </View>
+                ) : (
+                  <Video
+                    ref={videoRef}
+                    source={{ uri: videoModal.mediaUrl }}
+                    style={styles.videoPlayer}
+                    useNativeControls
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay
+                    isLooping={false}
+                    volume={1}
+                    onLoad={() => setVideoLoading(false)}
+                    onError={(e) => {
+                      setVideoLoading(false);
+                      setVideoError("تعذر تشغيل الفيديو");
+                      console.log("Video error (InfoScreen):", e);
+                    }}
+                  />
+                )}
+              </Pressable>
+            )}
+            <TouchableOpacity style={styles.closeVideoBtn} onPress={closeVideo}>
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -517,6 +716,147 @@ const styles = StyleSheet.create({
   momentSubtitle: {
     fontSize: 14,
     color: TEXT_MUTED,
+  },
+  momentLoadingWrap: {
+    paddingVertical: 40,
+    alignItems: "center",
+    gap: 12,
+  },
+  momentErrorWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    marginTop: 16,
+    borderRadius: 12,
+    backgroundColor: "rgba(239, 68, 68, 0.12)",
+  },
+  momentEmptyWrap: {
+    alignItems: "center",
+    paddingVertical: 40,
+    gap: 10,
+  },
+  momentEmptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: TEXT_LIGHT,
+  },
+  momentEmptySub: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  momentList: {
+    marginTop: 16,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  momentCard: {
+    width: (SCREEN_WIDTH - 20 * 2 - 12) / 2,
+    marginBottom: 12,
+    backgroundColor: ACCENT_MUTED_DARK,
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(167, 139, 250, 0.18)",
+  },
+  momentMediaWrap: {
+    width: "100%",
+    aspectRatio: 1,
+    position: "relative",
+  },
+  momentImage: {
+    width: "100%",
+    height: "100%",
+  },
+  momentPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.15)",
+  },
+  momentInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  momentInfoTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: TEXT_LIGHT,
+  },
+  momentInfoMeta: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    marginTop: 2,
+  },
+  momentLikesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  momentLikesText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: TEXT_LIGHT,
+  },
+  momentDeleteBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    padding: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  videoModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  videoModalContent: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  videoContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH * 1.2,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  videoPlayer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH * 1.2,
+  },
+  videoLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  videoLoadingText: { color: "#fff", fontSize: 14 },
+  videoErrorWrap: {
+    alignItems: "center",
+    gap: 12,
+    padding: 24,
+  },
+  videoErrorText: { color: "#f87171", fontSize: 14, textAlign: "center" },
+  closeVideoBtn: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   loadingWrap: {
     flex: 1,

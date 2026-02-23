@@ -154,7 +154,7 @@ function ProfileScreen({
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
@@ -514,10 +514,12 @@ function MainTabsScreen({
   user,
   onEditProfile,
   onOpenInfoPage,
+  onLogout,
 }: {
   user: NonNullable<User>;
   onEditProfile: () => void;
   onOpenInfoPage: () => void;
+  onLogout: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("home");
 
@@ -532,6 +534,7 @@ function MainTabsScreen({
             user={user}
             onEditProfile={onEditProfile}
             onOpenInfoPage={onOpenInfoPage}
+            onLogout={onLogout}
           />
         )}
         {activeTab === "messages" && <MessagesScreen />}
@@ -638,6 +641,18 @@ export default function Page() {
       clearInterval(interval);
     };
   }, [authState, user]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await AsyncStorage.multiRemove(["token", "user", "userId", "authEmail"]);
+      setUser(null);
+      setAuthState("email");
+      setEmail("");
+      setPin(["", "", "", "", "", ""]);
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
+  }, []);
 
   const requestPin = useCallback(async () => {
     const trimmed = email.trim().toLowerCase();
@@ -865,6 +880,7 @@ export default function Page() {
         user={user}
         onEditProfile={() => setShowProfileEdit(true)}
         onOpenInfoPage={() => setShowInfoPage(true)}
+        onLogout={handleLogout}
       />
     );
   }

@@ -1,7 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
-// يجب أن يتطابق مع API_BASE_URL في Login.jsx
+// يجب أن يتطابق مع عنوان الخادم. غيّره حسب بيئة التشغيل:
+// - محلي (نفق loca.lt): "https://myapi123.loca.lt"
+// - محلي (محاكي): "http://localhost:3000"
+// - أندرويد محاكي: "http://10.0.2.2:3000"
 export const API_BASE_URL = "https://myapi123.loca.lt";
 
 /**
@@ -72,9 +75,14 @@ async function verifyTokenWithServer(token, retries = 2) {
         continue;
       }
 
-      // إذا كان 401 أو 403 أو 404 (مستخدم محذوف من الداتابيس)، التوكن غير صالح
-      if (status === 401 || status === 403 || status === 404) {
+      // 401 أو 403 = توكن غير صالح
+      if (status === 401 || status === 403) {
         return { success: false, reason: "invalid_token" };
+      }
+
+      // 404 = المسار غير موجود على الخادم — نستخدم البيانات المحلية بدل تسجيل الخروج
+      if (status === 404) {
+        return { success: false, reason: "network_error" };
       }
 
       // خطأ شبكة أو timeout - نرجع null للسماح بالfallback
