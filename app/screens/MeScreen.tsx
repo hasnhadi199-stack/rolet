@@ -6,7 +6,6 @@ import {
   View,
   TouchableOpacity,
   Image,
-  Alert,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +13,7 @@ import * as Clipboard from "expo-clipboard";
 import * as Localization from "expo-localization";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getFlagEmoji, getCountryName } from "../../utils/countries";
+import { useAppAlert } from "../components/AppAlertProvider";
 
 const PURPLE_DARK = "#1a1625";
 const ACCENT_SOFT = "#c4b5fd";
@@ -71,6 +71,7 @@ type Props = {
 };
 
 export default function MeScreen({ user, onEditProfile, onOpenInfoPage, onLogout }: Props) {
+  const { show } = useAppAlert();
   const deviceCountry = getDeviceCountryCode();
   const countryCode = user.country || deviceCountry || "";
   const flag = getFlagEmoji(countryCode);
@@ -90,23 +91,20 @@ export default function MeScreen({ user, onEditProfile, onOpenInfoPage, onLogout
 
   const copyUserId = useCallback(async () => {
     await Clipboard.setStringAsync(String(userId));
-    Alert.alert("تم النسخ", "تم نسخ المعرف بنجاح");
-  }, [userId]);
+    show({ title: "تم النسخ", message: "تم نسخ المعرف بنجاح", type: "success" });
+  }, [userId, show]);
 
   const handleLogout = useCallback(() => {
-    Alert.alert(
-      "تسجيل الخروج",
-      "هل أنت متأكد من تسجيل الخروج؟",
-      [
+    show({
+      title: "تسجيل الخروج",
+      message: "هل أنت متأكد من تسجيل الخروج؟",
+      type: "warning",
+      buttons: [
         { text: "إلغاء", style: "cancel" },
-        {
-          text: "تسجيل الخروج",
-          style: "destructive",
-          onPress: onLogout,
-        },
-      ]
-    );
-  }, [onLogout]);
+        { text: "تسجيل الخروج", style: "destructive", onPress: onLogout },
+      ],
+    });
+  }, [onLogout, show]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

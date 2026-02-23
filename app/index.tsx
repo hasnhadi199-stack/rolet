@@ -29,6 +29,7 @@ import InfoScreen from "./screens/InfoScreen";
 import MessagesScreen from "./screens/MessagesScreen";
 import ClubScreen from "./screens/ClubScreen";
 import MomentScreen from "./screens/MomentScreen";
+import { AppAlertProvider } from "./components/AppAlertProvider";
 
 const { width } = Dimensions.get("window");
 
@@ -842,16 +843,18 @@ export default function Page() {
   // ——— شاشة البداية (Splash) ———
   if (authState === "splash") {
     return (
-      <Animated.View style={[styles.splashContainer, { opacity: fadeAnim }]}>
-        <View style={styles.splashContent}>
-          <LottieView
-            source={require("../assets/images/3D Treasure Box (1).json")}
-            autoPlay
-            loop={false}
-            style={styles.lottie}
-          />
-        </View>
-      </Animated.View>
+      <AppAlertProvider>
+        <Animated.View style={[styles.splashContainer, { opacity: fadeAnim }]}>
+          <View style={styles.splashContent}>
+            <LottieView
+              source={require("../assets/images/3D Treasure Box (1).json")}
+              autoPlay
+              loop={false}
+              style={styles.lottie}
+            />
+          </View>
+        </Animated.View>
+      </AppAlertProvider>
     );
   }
 
@@ -860,28 +863,31 @@ export default function Page() {
     const profileComplete = isProfileComplete(user);
     if (showProfileEdit || !profileComplete) {
       return (
-        <ProfileScreen
-          user={user}
-          onUserUpdate={setUser}
-          onBack={profileComplete ? () => setShowProfileEdit(false) : undefined}
-        />
+        <AppAlertProvider>
+          <ProfileScreen
+            user={user}
+            onUserUpdate={setUser}
+            onBack={profileComplete ? () => setShowProfileEdit(false) : undefined}
+          />
+        </AppAlertProvider>
       );
     }
     if (showInfoPage) {
       return (
-        <InfoScreen
-          user={user}
-          onBack={() => setShowInfoPage(false)}
-        />
+        <AppAlertProvider>
+          <InfoScreen user={user} onBack={() => setShowInfoPage(false)} />
+        </AppAlertProvider>
       );
     }
     return (
-      <MainTabsScreen
-        user={user}
-        onEditProfile={() => setShowProfileEdit(true)}
-        onOpenInfoPage={() => setShowInfoPage(true)}
-        onLogout={handleLogout}
-      />
+      <AppAlertProvider>
+        <MainTabsScreen
+          user={user}
+          onEditProfile={() => setShowProfileEdit(true)}
+          onOpenInfoPage={() => setShowInfoPage(true)}
+          onLogout={handleLogout}
+        />
+      </AppAlertProvider>
     );
   }
 
@@ -890,18 +896,19 @@ export default function Page() {
   const isSignup = authState === "signup";
 
   return (
-    <KeyboardAvoidingView
-      style={styles.loginContainer}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
-    >
-      <ScrollView
-        style={styles.loginScroll}
-        contentContainerStyle={styles.loginScrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <AppAlertProvider>
+      <KeyboardAvoidingView
+        style={styles.loginContainer}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
       >
-        <View style={styles.loginInner}>
+        <ScrollView
+          style={styles.loginScroll}
+          contentContainerStyle={styles.loginScrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.loginInner}>
           {/* أنيميشن صندوق الكنز فوق النموذج */}
           <View style={styles.lottieWrap}>
             <LottieView
@@ -1013,9 +1020,10 @@ export default function Page() {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {successMsg ? <Text style={styles.successText}>{successMsg}</Text> : null}
         </View>
-      </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </AppAlertProvider>
   );
 }
 

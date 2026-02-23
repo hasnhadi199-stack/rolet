@@ -5,7 +5,6 @@ import {
   Text,
   View,
   TouchableOpacity,
-  Alert,
   Image,
   Dimensions,
   NativeSyntheticEvent,
@@ -25,6 +24,7 @@ import { getFlagEmoji, getCountryName } from "../../utils/countries";
 import { API_BASE_URL } from "../../utils/authHelper";
 import { fetchMoments, deleteMoment, fetchMomentLikers, type Moment, type MomentLiker } from "../../utils/momentsApi";
 import { Video, ResizeMode } from "expo-av";
+import { useAppAlert } from "../components/AppAlertProvider";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SLIDER_HEIGHT = 320;
@@ -37,7 +37,6 @@ const ACCENT_MUTED = "rgba(88, 28, 135, 0.35)";
 const ACCENT_MUTED_DARK = "rgba(15, 23, 42, 0.95)";
 const TEXT_LIGHT = "#f5f3ff";
 const TEXT_MUTED = "#a1a1aa";
-const BORDER_ACCENT = "rgba(167, 139, 250, 0.4)";
 const CARD_SHADOW = Platform.select({
   ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
   android: { elevation: 6 },
@@ -136,6 +135,7 @@ type Props = {
 };
 
 export default function InfoScreen({ user: userProp, onBack }: Props) {
+  const { show } = useAppAlert();
   const deviceCountry = getDeviceCountryCode();
   const [profile, setProfile] = useState<UserProfile | null>(userProp);
   const [loading, setLoading] = useState(true);
@@ -180,7 +180,7 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
 
   const onLikePress = useCallback(async () => {
     if (hasLiked) {
-      Alert.alert("تم بالفعل", "لا يمكن الإعجاب أكثر من مرة واحدة.");
+      show({ title: "تم بالفعل", message: "لا يمكن الإعجاب أكثر من مرة واحدة.", type: "info" });
       return;
     }
     const newCount = likeCount + 1;
@@ -189,7 +189,7 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
     const keyLiked = `profile_liked_${profileId}`;
     const keyCount = `profile_likes_count_${profileId}`;
     await AsyncStorage.multiSet([[keyLiked, "1"], [keyCount, String(newCount)]]);
-  }, [hasLiked, likeCount, profileId]);
+  }, [hasLiked, likeCount, profileId, show]);
 
   const fetchProfile = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -272,10 +272,11 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
 
   const handleDeleteMoment = useCallback(
     async (moment: Moment) => {
-      Alert.alert(
-        "حذف اللحظة",
-        "هل تريد حذف هذه اللحظة؟",
-        [
+      show({
+        title: "حذف اللحظة",
+        message: "هل تريد حذف هذه اللحظة؟",
+        type: "warning",
+        buttons: [
           { text: "إلغاء", style: "cancel" },
           {
             text: "حذف",
@@ -286,14 +287,14 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
                 setMoments((prev) => prev.filter((m) => m.id !== moment.id));
                 if (videoModal?.id === moment.id) closeVideo();
               } else {
-                Alert.alert("خطأ", "تعذر الحذف");
+                show({ title: "خطأ", message: "تعذر الحذف", type: "error" });
               }
             },
           },
-        ]
-      );
+        ],
+      });
     },
-    [closeVideo, videoModal]
+    [closeVideo, videoModal, show]
   );
 
   useEffect(() => {
@@ -314,8 +315,8 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
 
   const copyUserId = useCallback(async () => {
     await Clipboard.setStringAsync(String(userId));
-    Alert.alert("تم النسخ", "تم نسخ المعرف بنجاح");
-  }, [userId]);
+    show({ title: "تم النسخ", message: "تم نسخ المعرف بنجاح", type: "success" });
+  }, [userId, show]);
 
   return (
     <View style={styles.container}>
@@ -938,6 +939,29 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "rgba(0,0,0,0.55)",
   },
+  avatarSmallPlaceholder: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  locationFlag: { fontSize: 12 },
+  locationText: { fontSize: 11, color: TEXT_MUTED },
+  genderBadge: {
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  genderBadgeMale: {
+    backgroundColor: "#38bdf8",
+  },
+  genderBadgeFemale: {
+    backgroundColor: "#fb7185",
+  },
+  genderBadgeText: { fontSize: 12, fontWeight: "700", color: "#ffffff" },
   videoModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.95)",

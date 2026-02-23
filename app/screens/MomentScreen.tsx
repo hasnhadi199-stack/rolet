@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  Alert,
   ActivityIndicator,
   RefreshControl,
   Platform,
@@ -29,6 +28,7 @@ import {
   type MomentLiker,
 } from "../../utils/momentsApi";
 import { getFlagEmoji, getCountryName } from "../../utils/countries";
+import { useAppAlert } from "../components/AppAlertProvider";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COLS = 2;
@@ -98,6 +98,7 @@ type User = {
 type Props = { user: User };
 
 export default function MomentScreen({ user }: Props) {
+  const { show } = useAppAlert();
   const [moments, setMoments] = useState<Moment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -160,7 +161,7 @@ export default function MomentScreen({ user }: Props) {
   const handleAddMoment = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("تنبيه", "يجب السماح بالوصول للصور والفيديو");
+      show({ title: "تنبيه", message: "يجب السماح بالوصول للصور والفيديو", type: "warning" });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -176,7 +177,11 @@ export default function MomentScreen({ user }: Props) {
     const durationSec = Math.ceil(durationMillis / 1000);
 
     if (isVideo && durationSec > MAX_VIDEO_SEC) {
-      Alert.alert("فيديو طويل", `الحد الأقصى للفيديو ${MAX_VIDEO_SEC} ثوانٍ. المدة المختارة: ${durationSec} ثانية.`);
+      show({
+        title: "فيديو طويل",
+        message: `الحد الأقصى للفيديو ${MAX_VIDEO_SEC} ثوانٍ. المدة المختارة: ${durationSec} ثانية.`,
+        type: "warning",
+      });
       return;
     }
 
@@ -209,14 +214,18 @@ export default function MomentScreen({ user }: Props) {
       if (moment) {
         setMoments((prev) => [moment, ...prev]);
       } else {
-        Alert.alert("تنبيه", "تعذر النشر. تأكد من الاتصال أو أن الخادم يدعم اللحظات.");
+        show({
+          title: "تنبيه",
+          message: "تعذر النشر. تأكد من الاتصال أو أن الخادم يدعم اللحظات.",
+          type: "warning",
+        });
       }
     } catch (e) {
-      Alert.alert("خطأ", (e as Error)?.message || "تعذر رفع اللحظة");
+      show({ title: "خطأ", message: (e as Error)?.message || "تعذر رفع اللحظة", type: "error" });
     } finally {
       setPosting(false);
     }
-  }, [user]);
+  }, [user, show]);
 
   const handleLike = useCallback(async (moment: Moment, e?: any) => {
     e?.stopPropagation?.();
@@ -247,10 +256,11 @@ export default function MomentScreen({ user }: Props) {
     async (moment: Moment, e?: any) => {
       e?.stopPropagation?.();
       if (moment.userId !== currentUserId) return;
-      Alert.alert(
-        "حذف اللحظة",
-        "هل تريد حذف هذه اللحظة؟",
-        [
+      show({
+        title: "حذف اللحظة",
+        message: "هل تريد حذف هذه اللحظة؟",
+        type: "warning",
+        buttons: [
           { text: "إلغاء", style: "cancel" },
           {
             text: "حذف",
@@ -261,14 +271,14 @@ export default function MomentScreen({ user }: Props) {
                 setMoments((prev) => prev.filter((m) => m.id !== moment.id));
                 if (videoModal?.id === moment.id) closeVideo();
               } else {
-                Alert.alert("خطأ", "تعذر الحذف");
+                show({ title: "خطأ", message: "تعذر الحذف", type: "error" });
               }
             },
           },
-        ]
-      );
+        ],
+      });
     },
-    [currentUserId, videoModal, closeVideo]
+    [currentUserId, videoModal, closeVideo, show]
   );
 
   const totalMyLikes = moments
@@ -544,9 +554,7 @@ export default function MomentScreen({ user }: Props) {
           </View>
         </View>
       </View>
-      <Text style={styles.subtitle}>
-        شارك لحظاتك وشاهد لحظات الآخرين
-      </Text>
+    
 
       <FlatList
         data={visibleMoments}
