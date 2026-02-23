@@ -23,7 +23,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { getFlagEmoji, getCountryName } from "../../utils/countries";
 import { API_BASE_URL } from "../../utils/authHelper";
-import { fetchMoments, deleteMoment, type Moment } from "../../utils/momentsApi";
+import { fetchMoments, deleteMoment, fetchMomentLikers, type Moment, type MomentLiker } from "../../utils/momentsApi";
 import { Video, ResizeMode } from "expo-av";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -31,10 +31,10 @@ const SLIDER_HEIGHT = 320;
 const CARD_MARGIN = 16;
 const CARD_WIDTH = SCREEN_WIDTH - CARD_MARGIN * 2;
 
-const PURPLE_DARK = "#1a1625";
+const PURPLE_DARK = "#050816";
 const ACCENT_SOFT = "#c4b5fd";
-const ACCENT_MUTED = "rgba(167, 139, 250, 0.25)";
-const ACCENT_MUTED_DARK = "rgba(45, 38, 64, 0.8)";
+const ACCENT_MUTED = "rgba(88, 28, 135, 0.35)";
+const ACCENT_MUTED_DARK = "rgba(15, 23, 42, 0.95)";
 const TEXT_LIGHT = "#f5f3ff";
 const TEXT_MUTED = "#a1a1aa";
 const BORDER_ACCENT = "rgba(167, 139, 250, 0.4)";
@@ -147,6 +147,9 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
   const [videoModal, setVideoModal] = useState<Moment | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [momentLikers, setMomentLikers] = useState<MomentLiker[]>([]);
+  const [momentLikersLoading, setMomentLikersLoading] = useState(false);
+  const [momentLikersError, setMomentLikersError] = useState<string | null>(null);
 
   const user = profile || userProp;
   const countryCode = user.country || deviceCountry || "";
@@ -241,10 +244,24 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
   );
 
   const openVideo = useCallback((moment: Moment) => {
-    if (moment.mediaType !== "video") return;
-    setVideoError(null);
-    setVideoLoading(true);
     setVideoModal(moment);
+    setVideoError(null);
+    setVideoLoading(moment.mediaType === "video");
+    setMomentLikers([]);
+    setMomentLikersError(null);
+    setMomentLikersLoading(true);
+
+    // جلب المعجبين الخاصين بهذه اللحظة فقط
+    fetchMomentLikers(moment.id)
+      .then((list) => {
+        setMomentLikers(list);
+      })
+      .catch((e: any) => {
+        setMomentLikersError(e?.message || "تعذر جلب قائمة المعجبين");
+      })
+      .finally(() => {
+        setMomentLikersLoading(false);
+      });
   }, []);
 
   const closeVideo = useCallback(() => {
@@ -399,8 +416,7 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
       >
         {activeTab === "moment" ? (
           <View style={styles.momentContent}>
-            <Text style={styles.momentTitle}>لحظاتي</Text>
-            <Text style={styles.momentSubtitle}>كل اللحظات التي قمت بنشرها من صفحة اللحظات تظهر هنا.</Text>
+          
 
             {momentsLoading ? (
               <View style={styles.momentLoadingWrap}>
@@ -426,7 +442,7 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
                   <View key={m.id} style={[styles.momentCard, CARD_SHADOW]}>
                     <TouchableOpacity
                       activeOpacity={0.9}
-                      onPress={() => (m.mediaType === "video" ? openVideo(m) : null)}
+                      onPress={() => openVideo(m)}
                     >
                       <View style={styles.momentMediaWrap}>
                         <Image
@@ -538,7 +554,7 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
         )}
       </ScrollView>
 
-      {/* مشغل الفيديو للحظات المستخدم */}
+      {/* تفاصيل اللحظة داخل صفحة المعلومات: صورة/فيديو + المعجبين */}
       <Modal
         visible={!!videoModal}
         animationType="fade"
@@ -549,35 +565,146 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
           <View style={styles.videoModalContent}>
             {videoModal && (
               <Pressable onPress={(e) => e.stopPropagation()} style={styles.videoContainer}>
-                {videoLoading && (
-                  <View style={styles.videoLoadingOverlay}>
-                    <ActivityIndicator size="large" color="#fff" />
-                    <Text style={styles.videoLoadingText}>جاري تحميل الفيديو...</Text>
+                <View style={styles.detailsMediaWrap}>
+                  {videoModal.mediaType === "video" ? (
+                    <>
+                      {videoLoading && (
+                        <View style={styles.videoLoadingOverlay}>
+                          <ActivityIndicator size="large" color="#fff" />
+                          <Text style={styles.videoLoadingText}>جاري تحميل الفيديو...</Text>
+                        </View>
+                      )}
+                      {videoError ? (
+                        <View style={styles.videoErrorWrap}>
+                          <Ionicons name="alert-circle-outline" size={48} color="#f87171" />
+                          <Text style={styles.videoErrorText}>{videoError}</Text>
+                        </View>
+                      ) : (
+                        <Video
+                          ref={videoRef}
+                              source={{
+                                uri: videoModal.mediaUrl,
+                                headers: { "bypass-tunnel-reminder": "true" },
+                              }}
+                          style={styles.videoPlayer}
+                          useNativeControls
+                          resizeMode={ResizeMode.CONTAIN}
+                          shouldPlay
+                          isLooping={false}
+                          volume={1}
+                          onLoad={() => setVideoLoading(false)}
+                          onError={(e) => {
+                            setVideoLoading(false);
+                            setVideoError("تعذر تشغيل الفيديو");
+                            console.log("Video error (InfoScreen):", e);
+                          }}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <Image
+                      source={{ uri: videoModal.mediaUrl }}
+                      style={styles.detailsImage}
+                      resizeMode="cover"
+                    />
+                  )}
+                </View>
+
+                <View style={styles.detailsContent}>
+                  <View style={styles.detailsHeaderRow}>
+                    <View>
+                      <Text style={styles.detailsTitle}>لحظتي</Text>
+                      {!!videoModal.createdAt && (
+                        <Text style={styles.detailsMeta}>
+                          {new Date(videoModal.createdAt).toLocaleString()}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.detailsLikes}>
+                      <Ionicons name="thumbs-up" size={18} color={ACCENT_SOFT} />
+                      <Text style={styles.detailsLikesText}>{videoModal.likeCount}</Text>
+                    </View>
                   </View>
-                )}
-                {videoError ? (
-                  <View style={styles.videoErrorWrap}>
-                    <Ionicons name="alert-circle-outline" size={48} color="#f87171" />
-                    <Text style={styles.videoErrorText}>{videoError}</Text>
+
+                  <View style={styles.detailsSectionHeader}>
+                    <Text style={styles.detailsSectionTitle}>المعجبون بهذه اللحظة</Text>
                   </View>
-                ) : (
-                  <Video
-                    ref={videoRef}
-                    source={{ uri: videoModal.mediaUrl }}
-                    style={styles.videoPlayer}
-                    useNativeControls
-                    resizeMode={ResizeMode.CONTAIN}
-                    shouldPlay
-                    isLooping={false}
-                    volume={1}
-                    onLoad={() => setVideoLoading(false)}
-                    onError={(e) => {
-                      setVideoLoading(false);
-                      setVideoError("تعذر تشغيل الفيديو");
-                      console.log("Video error (InfoScreen):", e);
-                    }}
-                  />
-                )}
+
+                  {momentLikersLoading ? (
+                    <View style={styles.detailsLikersLoading}>
+                      <ActivityIndicator size="small" color={ACCENT_SOFT} />
+                      <Text style={styles.detailsLikersLoadingText}>جاري تحميل المعجبين...</Text>
+                    </View>
+                  ) : momentLikersError ? (
+                    <Text style={styles.detailsLikersError}>{momentLikersError}</Text>
+                  ) : momentLikers.length === 0 ? (
+                    <Text style={styles.detailsLikersEmpty}>لا يوجد معجبون بهذه اللحظة حتى الآن</Text>
+                  ) : (
+                    <ScrollView style={styles.detailsLikersList}>
+                      {momentLikers.map((lk) => {
+                        const lkFlag = lk.country ? getFlagEmoji(lk.country) : "";
+                        const lkCountryName = lk.country ? getCountryName(lk.country) : "";
+                        const genderBadgeStyle =
+                          lk.gender === "male"
+                            ? styles.genderBadgeMale
+                            : lk.gender === "female"
+                            ? styles.genderBadgeFemale
+                            : null;
+                        return (
+                          <View key={lk.userId} style={styles.detailsLikerRow}>
+                            <View style={styles.detailsLikerAvatarWrap}>
+                              {lk.profileImage ? (
+                                <Image source={{ uri: lk.profileImage }} style={styles.detailsLikerAvatar} />
+                              ) : (
+                                <View style={[styles.detailsLikerAvatar, styles.avatarSmallPlaceholder]}>
+                                  <Ionicons name="person" size={20} color={TEXT_MUTED} />
+                                </View>
+                              )}
+                            </View>
+                            <View style={styles.detailsLikerInfo}>
+                              <Text style={styles.detailsLikerName} numberOfLines={1}>
+                                {lk.name}
+                              </Text>
+                              <View style={styles.detailsLikerMetaRow}>
+                                {lk.age != null && genderBadgeStyle && (
+                                  <View style={[styles.genderBadge, genderBadgeStyle]}>
+                                    <Ionicons
+                                      name={lk.gender === "male" ? "male" : "female"}
+                                      size={12}
+                                      color="#ffffff"
+                                    />
+                                    <Text style={styles.genderBadgeText}>{lk.age}</Text>
+                                  </View>
+                                )}
+                                {lk.country && (
+                                  <View style={styles.detailsLikerCountryRow}>
+                                    {!!lkFlag && <Text style={styles.locationFlag}>{lkFlag}</Text>}
+                                    <Text style={styles.locationText} numberOfLines={1}>
+                                      {lkCountryName || lk.country}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+                            {lk.lastMediaUrl && (
+                              <View style={styles.detailsLikerThumbWrap}>
+                                <Image
+                                  source={{ uri: lk.lastThumbnailUrl || lk.lastMediaUrl }}
+                                  style={styles.detailsLikerThumb}
+                                />
+                                {lk.lastMediaType === "video" && (
+                                  <View style={styles.detailsLikerThumbOverlay}>
+                                    <Ionicons name="play" size={12} color="#ffffff" />
+                                  </View>
+                                )}
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                  )}
+                </View>
               </Pressable>
             )}
             <TouchableOpacity style={styles.closeVideoBtn} onPress={closeVideo}>
@@ -591,17 +718,20 @@ export default function InfoScreen({ user: userProp, onBack }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: PURPLE_DARK, paddingTop: 40 },
+  container: {
+    flex: 1,
+    backgroundColor: PURPLE_DARK,
+    paddingTop: 40,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: ACCENT_MUTED,
+    borderBottomWidth: 0,
   },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
-  backText: { fontSize: 16, color: ACCENT_SOFT, fontWeight: "600" },
+  backText: { fontSize: 16, color: TEXT_LIGHT, fontWeight: "600" },
   title: {
     flex: 1,
     fontSize: 18,
@@ -610,8 +740,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   scroll: { flex: 1 },
-  content: { paddingBottom: 24 },
-  sliderWrap: { marginBottom: 20 },
+  content: { paddingBottom: 32 },
+  sliderWrap: { marginBottom: 20, paddingTop: 4 },
   sliderContent: {
     paddingHorizontal: CARD_MARGIN,
     gap: CARD_MARGIN,
@@ -619,10 +749,10 @@ const styles = StyleSheet.create({
   slideCard: {
     width: CARD_WIDTH,
     height: SLIDER_HEIGHT,
-    borderRadius: 24,
+    borderRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: BORDER_ACCENT,
+    borderColor: "rgba(129, 140, 248, 0.6)",
   },
   slideImage: { width: "100%", height: "100%" },
   likeIconWrap: {
@@ -644,7 +774,7 @@ const styles = StyleSheet.create({
     color: "#f5f3ff",
   },
   slidePlaceholder: {
-    backgroundColor: ACCENT_MUTED,
+    backgroundColor: "rgba(15, 23, 42, 0.9)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -672,26 +802,22 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: ACCENT_MUTED,
+    paddingVertical: 10,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
-    backgroundColor: ACCENT_MUTED,
+    borderRadius: 999,
+    backgroundColor: "rgba(15, 23, 42, 0.85)",
   },
   tabActive: {
-    backgroundColor: "rgba(167, 139, 250, 0.45)",
-    borderWidth: 1,
-    borderColor: BORDER_ACCENT,
+    backgroundColor: "rgba(129, 140, 248, 0.95)",
+    borderWidth: 0,
   },
   tabText: {
     fontSize: 15,
@@ -699,13 +825,13 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
   },
   tabTextActive: {
-    color: ACCENT_SOFT,
+    color: "#0f172a",
     fontWeight: "700",
   },
   momentContent: {
     paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 24,
+    paddingTop: 18,
+    paddingBottom: 28,
   },
   momentTitle: {
     fontSize: 22,
@@ -733,7 +859,7 @@ const styles = StyleSheet.create({
   },
   momentEmptyWrap: {
     alignItems: "center",
-    paddingVertical: 40,
+    paddingVertical: 32,
     gap: 10,
   },
   momentEmptyTitle: {
@@ -748,16 +874,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   momentList: {
-    marginTop: 16,
+    marginTop: 18,
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
   },
   momentCard: {
     width: (SCREEN_WIDTH - 20 * 2 - 12) / 2,
-    marginBottom: 12,
+    marginBottom: 14,
     backgroundColor: ACCENT_MUTED_DARK,
-    borderRadius: 18,
+    borderRadius: 24,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(167, 139, 250, 0.18)",
@@ -814,7 +940,7 @@ const styles = StyleSheet.create({
   },
   videoModalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.92)",
+    backgroundColor: "rgba(15,23,42,0.95)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -826,13 +952,14 @@ const styles = StyleSheet.create({
   },
   videoContainer: {
     width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 1.2,
-    justifyContent: "center",
-    alignItems: "center",
+    maxHeight: SCREEN_WIDTH * 1.7,
+    borderRadius: 28,
+    overflow: "hidden",
+    backgroundColor: "rgba(24,20,37,0.98)",
   },
   videoPlayer: {
     width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 1.2,
+    height: SCREEN_WIDTH * 0.9,
   },
   videoLoadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -858,6 +985,141 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  detailsMediaWrap: {
+    width: "100%",
+    height: SCREEN_WIDTH * 0.9,
+    backgroundColor: "black",
+  },
+  detailsImage: {
+    width: "100%",
+    height: "100%",
+  },
+  detailsContent: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  detailsHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  detailsTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: TEXT_LIGHT,
+  },
+  detailsMeta: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginTop: 2,
+  },
+  detailsLikes: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(15, 23, 42, 0.85)",
+  },
+  detailsLikesText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT_LIGHT,
+  },
+  detailsSectionHeader: {
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  detailsSectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: TEXT_MUTED,
+  },
+  detailsLikersLoading: {
+    paddingVertical: 12,
+    alignItems: "center",
+    gap: 6,
+  },
+  detailsLikersLoadingText: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+  },
+  detailsLikersError: {
+    fontSize: 13,
+    color: "#f87171",
+    marginTop: 8,
+  },
+  detailsLikersEmpty: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+    marginTop: 8,
+  },
+  detailsLikersList: {
+    maxHeight: SCREEN_WIDTH * 0.9,
+    marginTop: 6,
+  },
+  detailsLikerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148, 163, 184, 0.25)",
+  },
+  detailsLikerAvatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(167, 139, 250, 0.5)",
+    marginRight: 10,
+  },
+  detailsLikerAvatar: {
+    width: "100%",
+    height: "100%",
+  },
+  detailsLikerInfo: {
+    flex: 1,
+  },
+  detailsLikerName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: TEXT_LIGHT,
+    marginBottom: 2,
+  },
+  detailsLikerMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  detailsLikerCountryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  detailsLikerThumbWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(167, 139, 250, 0.4)",
+    marginLeft: 8,
+    position: "relative",
+  },
+  detailsLikerThumb: {
+    width: "100%",
+    height: "100%",
+  },
+  detailsLikerThumbOverlay: {
+    position: "absolute",
+    inset: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
   loadingWrap: {
     flex: 1,
     justifyContent: "center",
@@ -881,7 +1143,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: TEXT_MUTED,
+    color: "rgba(148, 163, 184, 0.95)",
     marginLeft: 20,
     marginBottom: 10,
     marginTop: 20,
@@ -889,9 +1151,9 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     marginHorizontal: 20,
-    marginBottom: 4,
+    marginBottom: 10,
     backgroundColor: ACCENT_MUTED_DARK,
-    borderRadius: 20,
+    borderRadius: 22,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(167, 139, 250, 0.15)",

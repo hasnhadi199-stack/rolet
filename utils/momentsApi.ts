@@ -215,3 +215,34 @@ export async function fetchMyMomentLikers(): Promise<MomentLiker[]> {
     }
   }
 }
+
+/**
+ * جلب قائمة المعجبين بلحظة معينة (حسب معرف اللحظة)
+ * المسار المتوقَّع في الباك اند:
+ * GET /api/moments/:id/likers → { success: boolean, users: MomentLiker[] }
+ */
+export async function fetchMomentLikers(momentId: string): Promise<MomentLiker[]> {
+  const token = await getAuthToken();
+  if (!token) return [];
+
+  const tryGet = async (baseUrl: string) => {
+    const res = await axios.get(`${baseUrl}/api/moments/${momentId}/likers`, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 10000,
+    });
+    if (res.data?.success && Array.isArray(res.data.users)) {
+      return res.data.users as MomentLiker[];
+    }
+    return [];
+  };
+
+  try {
+    return await tryGet(API_BASE_URL);
+  } catch {
+    try {
+      return await tryGet(FALLBACK_URL);
+    } catch {
+      return [];
+    }
+  }
+}
