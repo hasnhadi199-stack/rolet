@@ -67,10 +67,11 @@ type Props = {
   };
   onEditProfile: () => void;
   onOpenInfoPage: () => void;
+  onOpenTopup: () => void;
   onLogout: () => void;
 };
 
-export default function MeScreen({ user, onEditProfile, onOpenInfoPage, onLogout }: Props) {
+export default function MeScreen({ user, onEditProfile, onOpenInfoPage, onOpenTopup, onLogout }: Props) {
   const { show } = useAppAlert();
   const deviceCountry = getDeviceCountryCode();
   const countryCode = user.country || deviceCountry || "";
@@ -182,7 +183,11 @@ export default function MeScreen({ user, onEditProfile, onOpenInfoPage, onLogout
 
         {/* الشحن والإيرادات — بطاقات حديثة */}
         <View style={styles.financeRow}>
-          <TouchableOpacity style={[styles.financeCard, CARD_SHADOW]} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={[styles.financeCard, CARD_SHADOW]}
+            activeOpacity={0.85}
+            onPress={onOpenTopup}
+          >
             <View style={styles.financeCardInner}>
               <View>
                 <Ionicons name="cash-outline" size={24} color="#fff7ed" />

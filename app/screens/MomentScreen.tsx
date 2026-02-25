@@ -682,7 +682,8 @@ export default function MomentScreen({ user }: Props) {
             ) : (
               <FlatList
                 data={likers}
-                keyExtractor={(u) => u.userId}
+                keyExtractor={(item, index) => `${item.userId}-${item.lastLikedAt ?? index}`}
+                showsVerticalScrollIndicator
                 renderItem={({ item }) => {
                   const flag = item.country ? getFlagEmoji(item.country) : "";
                   const countryName = item.country ? getCountryName(item.country) : "";

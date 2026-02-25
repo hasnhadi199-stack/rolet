@@ -30,6 +30,7 @@ import MessagesScreen from "./screens/MessagesScreen";
 import ClubScreen from "./screens/ClubScreen";
 import MomentScreen from "./screens/MomentScreen";
 import { AppAlertProvider } from "./components/AppAlertProvider";
+import TopupScreen from "./screens/TopupScreen";
 
 const { width } = Dimensions.get("window");
 
@@ -515,11 +516,13 @@ function MainTabsScreen({
   user,
   onEditProfile,
   onOpenInfoPage,
+  onOpenTopup,
   onLogout,
 }: {
   user: NonNullable<User>;
   onEditProfile: () => void;
   onOpenInfoPage: () => void;
+  onOpenTopup: () => void;
   onLogout: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("home");
@@ -535,6 +538,7 @@ function MainTabsScreen({
             user={user}
             onEditProfile={onEditProfile}
             onOpenInfoPage={onOpenInfoPage}
+            onOpenTopup={onOpenTopup}
             onLogout={onLogout}
           />
         )}
@@ -569,6 +573,7 @@ export default function Page() {
   const [splashDone, setSplashDone] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showInfoPage, setShowInfoPage] = useState(false);
+  const [showTopupPage, setShowTopupPage] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const pinRefs = useRef<(TextInput | null)[]>([]);
@@ -879,12 +884,20 @@ export default function Page() {
         </AppAlertProvider>
       );
     }
+    if (showTopupPage) {
+      return (
+        <AppAlertProvider>
+          <TopupScreen onBack={() => setShowTopupPage(false)} />
+        </AppAlertProvider>
+      );
+    }
     return (
       <AppAlertProvider>
         <MainTabsScreen
           user={user}
           onEditProfile={() => setShowProfileEdit(true)}
           onOpenInfoPage={() => setShowInfoPage(true)}
+          onOpenTopup={() => setShowTopupPage(true)}
           onLogout={handleLogout}
         />
       </AppAlertProvider>
