@@ -9,9 +9,12 @@ import {
   Animated,
   Modal,
   Alert,
+  Image,
+  ImageBackground,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { Video, ResizeMode } from "expo-av";
 import LottieView from "lottie-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
@@ -31,6 +34,11 @@ export default function TopupScreen({ onBack }: Props) {
 
   const [wheelVisible, setWheelVisible] = useState(false);
   const [boxRewardsVisible, setBoxRewardsVisible] = useState(false);
+  const [palaceEffectVisible, setPalaceEffectVisible] = useState(false);
+  const palaceAnim = useRef(new Animated.Value(0)).current;
+  const [bouquetEffectVisible, setBouquetEffectVisible] = useState(false);
+  const bouquetAnim = useRef(new Animated.Value(0)).current;
+  const winnersPulse = useRef(new Animated.Value(0)).current;
   const [isSpinning, setIsSpinning] = useState(false);
   const [rewardText, setRewardText] = useState<string | null>(null);
   const [lastBonusPercent, setLastBonusPercent] = useState(0);
@@ -62,6 +70,47 @@ export default function TopupScreen({ onBack }: Props) {
 
   const handleOpenBoxRewards = () => {
     setBoxRewardsVisible(true);
+  };
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(winnersPulse, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(winnersPulse, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [winnersPulse]);
+
+  const triggerBouquetEffect = () => {
+    bouquetAnim.setValue(0);
+    setBouquetEffectVisible(true);
+    Animated.timing(bouquetAnim, {
+      toValue: 1,
+      duration: 3000,
+      useNativeDriver: true,
+    }).start(() => {
+      setBouquetEffectVisible(false);
+    });
+  };
+
+  const triggerPalaceEffect = () => {
+    palaceAnim.setValue(0);
+    setPalaceEffectVisible(true);
+    Animated.timing(palaceAnim, {
+      toValue: 1,
+      duration: 7200,
+      useNativeDriver: true,
+    }).start(() => {
+      setPalaceEffectVisible(false);
+    });
   };
 
   const handleSpin = () => {
@@ -443,58 +492,413 @@ export default function TopupScreen({ onBack }: Props) {
               <Text style={styles.boxRewardsBackText}>رجوع</Text>
             </TouchableOpacity>
 
-            <View style={styles.boxRewardsHeader}>
-              <View style={styles.boxRewardsCrownWrap}>
-                <LottieView
-                  source={require("../../assets/images/3D Treasure Box (1).json")}
-                  autoPlay
-                  loop
-                  style={{ width: 140, height: 140, marginHorizontal: -10, marginVertical: -10 }}
-                />
+            {/* الرابح في الجولة الأخيرة */}
+            <View style={styles.winnersCard}>
+              <LinearGradient
+                colors={["#22d3ee", "#6366f1"]}
+                style={styles.winnersHeader}
+              >
+                <Text style={styles.winnersHeaderText}>الرابح في الجولة الأخيرة</Text>
+              </LinearGradient>
+              <View style={styles.winnersRow}>
+                {[0, 1, 2].map((i) => {
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.winnerItem,
+                        i === 1 && styles.winnerItemCenter,
+                      ]}
+                    >
+                      <Animated.View style={styles.winnerAvatarOuter}>
+                        {i === 1 ? (
+                          <View style={styles.winnerFireFrame}>
+                            <Video
+                              source={require("../../assets/images/dreamina-2026-02-27-4973-The flames surrounding the ornate golden....mp4")}
+                              style={StyleSheet.absoluteFillObject}
+                              isMuted
+                              isLooping
+                              shouldPlay
+                              resizeMode={ResizeMode.COVER}
+                            />
+                            <View style={styles.winnerAvatarInnerBig}>
+                              <Image
+                                source={require("../../assets/images/fel.jpg")}
+                                style={styles.winnerFireFrameImage}
+                                resizeMode="cover"
+                              />
+                            </View>
+                          </View>
+                        ) : i === 0 ? (
+                          <ImageBackground
+                            source={require("../../assets/images/asdselver.jpg")}
+                            style={styles.winnerFireFrame}
+                            imageStyle={styles.winnerFireFrameImage}
+                          >
+                            <View style={styles.winnerAvatarInnerBig}>
+                              <Ionicons name="cafe" size={24} color="#fefce8" />
+                            </View>
+                          </ImageBackground>
+                        ) : (
+                          <ImageBackground
+                            source={require("../../assets/images/asdred.jpg")}
+                            style={styles.winnerFireFrame}
+                            imageStyle={styles.winnerFireFrameImage}
+                          >
+                            <View style={styles.winnerAvatarInnerBig}>
+                              <Ionicons name="cafe" size={24} color="#fefce8" />
+                            </View>
+                          </ImageBackground>
+                        )}
+                      </Animated.View>
+                      <Text style={styles.winnerName}>
+                        {i === 1 ? "كرسي الفائز" : "كرسي مميز"}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
-              <Text style={styles.boxRewardsTitle}>مكافآت الصندوق</Text>
-              <Text style={styles.boxRewardsSubtitle}>
-                افتح الصندوق واربح جوائز مميزة
-              </Text>
             </View>
 
-            <LinearGradient
-              colors={["rgba(212,175,55,0.25)", "rgba(124,58,237,0.2)"]}
-              style={styles.boxRewardsCard}
+            <ScrollView
+              style={{ marginTop: 16 }}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              showsVerticalScrollIndicator={false}
             >
-              <View style={styles.boxRewardsCardInner}>
-                <View style={styles.boxRewardsBoxRow}>
-                  <View style={styles.boxRewardItem}>
-                    <LinearGradient
-                      colors={["#D4AF37", "#facc15"]}
-                      style={styles.boxRewardBox}
-                    >
-                      <Text style={styles.boxRewardBoxLabel}>ذهبي</Text>
-                    </LinearGradient>
+              <View style={styles.boxRewardsHeader}>
+                <View style={styles.boxRewardsCrownWrap}>
+                  <LottieView
+                    source={require("../../assets/images/3D Treasure Box (1).json")}
+                    autoPlay
+                    loop
+                    style={{ width: 140, height: 140, marginHorizontal: -10, marginVertical: -10 }}
+                  />
+                </View>
+                <Text style={styles.boxRewardsTitle}>مكافآت الصندوق</Text>
+                <View style={styles.boxRewardsSubtitleRow}>
+                  <Ionicons name="trophy" size={18} color="#facc15" style={styles.boxRewardsSubtitleIcon} />
+                  <Text style={styles.boxRewardsSubtitleText}>
+                    افتح الصندوق واربح جوائز مميزة تصل إلى{" "}
+                    <Text style={styles.boxRewardsSubtitleHighlight}>1000 🪙</Text>
+                  </Text>
+                </View>
+              </View>
+
+              <LinearGradient
+                colors={["rgba(212,175,55,0.25)", "rgba(124,58,237,0.2)"]}
+                style={styles.boxRewardsCard}
+              >
+                <View style={styles.boxRewardsCardInner}>
+                  <Text style={styles.royalSectionTitle}>الهدايا الملكية</Text>
+
+                  <View style={styles.royalThrone}>
+                    <View style={styles.royalThroneBack} />
+                    <View style={styles.royalThroneSeat}>
+                      <View style={styles.royalGiftsRow}>
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={triggerBouquetEffect}
+                          style={styles.royalGiftItem}
+                        >
+                          <View style={styles.royalGiftCrystal}>
+                            <View style={styles.royalGiftInner}>
+                              <Text style={styles.royalGiftEmoji}>💐</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.royalGiftLabel}>باقة ورد فخمة</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={triggerPalaceEffect}
+                          style={styles.royalGiftItem}
+                        >
+                          <View style={styles.royalGiftCrystal}>
+                            <View style={styles.royalGiftInner}>
+                              <Image
+                                source={require("../../assets/images/fel.jpg")}
+                                style={styles.royalGiftImage}
+                              />
+                            </View>
+                          </View>
+                          <Text style={styles.royalGiftLabel}>   قصر ملكي فاخر </Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.royalGiftItem}>
+                          <View style={styles.royalGiftCrystal}>
+                            <View style={styles.royalGiftInner}>
+                              <Text style={styles.royalGiftEmoji}>🏰</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.royalGiftLabel}> رولز رويس </Text>
+                        </View>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.boxRewardItem}>
-                    <LinearGradient
-                      colors={["#7c3aed", "#a78bfa"]}
-                      style={styles.boxRewardBox}
+
+                  <Text style={styles.boxRewardsHint}>
+                    كل صندوق يمكن أن يفتح لك واحدة من هذه الهدايا الملكية داخل كريستال فاخر، مع فرصة للوصول إلى{" "}
+                    <Text style={styles.boxRewardsSubtitleHighlight}>1000 🪙</Text>.
+                  </Text>
+                </View>
+              </LinearGradient>
+
+              {/* خلفية العرش مع صندوق وزر "افتح الصندوق" */}
+              <View style={styles.throneSection}>
+                <ImageBackground
+                  source={require("../../assets/images/arsh.jpg")}
+                  style={styles.throneImage}
+                  imageStyle={styles.throneImageInner}
+                >
+                  <View style={styles.throneCenter}>
+                    <LottieView
+                      source={require("../../assets/images/3D Treasure Box (1).json")}
+                      autoPlay
+                      loop
+                      style={styles.throneBoxLottie}
+                    />
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      style={styles.throneButton}
                     >
-                      <Text style={styles.boxRewardBoxLabel}>ماسي</Text>
-                    </LinearGradient>
+                      <Text style={styles.throneButtonText}>افتح الصندوق</Text>
+                    </TouchableOpacity>
                   </View>
-                  <View style={styles.boxRewardItem}>
-                    <LinearGradient
-                      colors={["#0ea5e9", "#38bdf8"]}
-                      style={styles.boxRewardBox}
-                    >
-                      <Text style={styles.boxRewardBoxLabel}>نادر</Text>
-                    </LinearGradient>
+                </ImageBackground>
+              </View>
+
+              {/* عرض المكافآت أسفل العرش (مثل الصورة المرسلة) */}
+              <View style={styles.rewardsSection}>
+                <Text style={styles.rewardsTitle}>عرض المكافآت</Text>
+
+                {/* صندوق أساسي */}
+                <View style={styles.rewardsBoxCard}>
+                  <View style={styles.rewardsBoxHeader}>
+                    <Text style={styles.rewardsBoxHeaderText}>صندوق الاساسي</Text>
+                  </View>
+                  <View style={styles.rewardsRow}>
+                    <View style={styles.rewardItem}>
+                      <View style={styles.rewardItemIconWrap}>
+                        <Text style={styles.rewardItemEmoji}>🌹</Text>
+                      </View>
+                      <Text style={styles.rewardItemLabel}>الورود الذهبية</Text>
+                      <Text style={styles.rewardItemCount}>1×</Text>
+                    </View>
+                    <View style={styles.rewardItem}>
+                      <View style={styles.rewardItemIconWrap}>
+                        <Ionicons name="car-sport" size={20} color="#e5e7eb" />
+                      </View>
+                      <Text style={styles.rewardItemLabel}>سيارة فخمة</Text>
+                      <Text style={styles.rewardItemCount}>1×</Text>
+                    </View>
+                    <View style={styles.rewardItem}>
+                      <View style={styles.rewardItemIconWrap}>
+          <Text style={styles.rewardItemEmoji}>🪙</Text>
+                      </View>
+                      <Text style={styles.rewardItemLabel}>الذهب</Text>
+                      <Text style={styles.rewardItemCount}>8×</Text>
+                    </View>
                   </View>
                 </View>
-                <Text style={styles.boxRewardsHint}>
-                  اجمع الذهب وافتح صناديق المكافآت اليومية لتحصل على هدايا مميزة وعناصر نادرة داخل اللعبة.
-                </Text>
+
+                {/* صندوق متوسط */}
+                <View style={styles.rewardsBoxCard}>
+                  <View style={styles.rewardsBoxHeader}>
+                    <Text style={styles.rewardsBoxHeaderText}>صندوق المتوسط</Text>
+                  </View>
+                  <View style={styles.rewardsRow}>
+                    <View style={styles.rewardItem}>
+                      <View style={styles.rewardItemIconWrap}>
+                        <Text style={styles.rewardItemEmoji}>🎂</Text>
+                      </View>
+                      <Text style={styles.rewardItemLabel}>هدية احتفالية</Text>
+                      <Text style={styles.rewardItemCount}>1×</Text>
+                    </View>
+                    <View style={styles.rewardItem}>
+                      <View style={styles.rewardItemIconWrap}>
+                        <Ionicons name="bicycle" size={20} color="#e5e7eb" />
+                      </View>
+                      <Text style={styles.rewardItemLabel}>مركبة نادرة</Text>
+                      <Text style={styles.rewardItemCount}>1×</Text>
+                    </View>
+                    <View style={styles.rewardItem}>
+                      <View style={styles.rewardItemIconWrap}>
+                        <Text style={styles.rewardItemEmoji}>💰</Text>
+                      </View>
+                      <Text style={styles.rewardItemLabel}>ذهب إضافي</Text>
+                      <Text style={styles.rewardItemCount}>4×</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* صندوق متطور (سطر أفقي قابل للتمرير مثل الصورة) */}
+                <View style={styles.rewardsBoxCard}>
+                  <View style={styles.rewardsBoxHeader}>
+                    <Text style={styles.rewardsBoxHeaderText}>صندوق المتطور</Text>
+                  </View>
+                  <View style={styles.advancedRowWrapper}>
+                    <Ionicons name="chevron-back" size={18} color="#bfdbfe" />
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.advancedRow}
+                    >
+                      <View style={styles.advancedRewardItem}>
+                        <View style={styles.advancedRewardIcon}>
+                          <Text style={styles.rewardItemEmoji}>🟣</Text>
+                        </View>
+                        <Text style={styles.rewardItemLabel}>كرة الحوت</Text>
+                        <Text style={styles.rewardItemCount}>1×</Text>
+                      </View>
+                      <View style={styles.advancedRewardItem}>
+                        <View style={styles.advancedRewardIcon}>
+                          <Text style={styles.rewardItemEmoji}>⭐</Text>
+                        </View>
+                        <Text style={styles.rewardItemLabel}>VIP</Text>
+                        <Text style={styles.rewardItemCount}>1×</Text>
+                      </View>
+                      <View style={styles.advancedRewardItem}>
+                        <View style={styles.advancedRewardIcon}>
+                          <Text style={styles.rewardItemEmoji}>🏝️</Text>
+                        </View>
+                        <Text style={styles.rewardItemLabel}>جزيرة الصيف</Text>
+                        <Text style={styles.rewardItemCount}>1×</Text>
+                      </View>
+                      <View style={styles.advancedRewardItem}>
+                        <View style={styles.advancedRewardIcon}>
+                          <Ionicons name="bicycle" size={18} color="#e5e7eb" />
+                        </View>
+                        <Text style={styles.rewardItemLabel}>دراجة</Text>
+                        <Text style={styles.rewardItemCount}>1×</Text>
+                      </View>
+                    </ScrollView>
+                    <Ionicons name="chevron-forward" size={18} color="#bfdbfe" />
+                  </View>
+                </View>
               </View>
-            </LinearGradient>
+            </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      {/* تأثير باقة الورد فقط (بدون صورة خلفية، حركة للإيموجي والنجوم) */}
+      <Modal visible={bouquetEffectVisible} transparent animationType="fade">
+        <View style={styles.bouquetEffectOverlay}>
+          <Animated.View
+            style={[
+              styles.bouquetEffectBubble,
+              {
+                opacity: bouquetAnim.interpolate({
+                  inputRange: [0, 0.2, 0.8, 1],
+                  outputRange: [0, 1, 1, 0],
+                }),
+                transform: [
+                  {
+                    scale: bouquetAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.4, 1.1],
+                    }),
+                  },
+                  {
+                    translateY: bouquetAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [40, -10],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={["#f97316", "#facc15"]}
+              style={styles.bouquetEffectBubbleInner}
+            >
+              <Text style={styles.bouquetEffectEmojiText}>💐</Text>
+            </LinearGradient>
+          </Animated.View>
+
+          {[0, 1, 2].map((i) => (
+            <Animated.View
+              key={i}
+              style={[
+                styles.bouquetStar,
+                styles[`bouquetStar${i + 1}` as "bouquetStar1"],
+                {
+                  opacity: bouquetAnim.interpolate({
+                    inputRange: [0, 0.3, 0.7, 1],
+                    outputRange: [0, 1, 1, 0],
+                  }),
+                  transform: [
+                    {
+                      scale: bouquetAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.5, 1.3],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Ionicons name="star" size={20} color="#facc15" />
+            </Animated.View>
+          ))}
+        </View>
+      </Modal>
+
+      {/* تأثير قصر ملكي عند الضغط */}
+      <Modal visible={palaceEffectVisible} transparent animationType="fade">
+        <View style={styles.palaceEffectOverlay}>
+          <Animated.View
+            style={[
+              styles.palaceEffectImageWrap,
+              {
+                opacity: palaceAnim.interpolate({
+                  inputRange: [0, 0.2, 0.8, 1],
+                  outputRange: [0, 1, 1, 0],
+                }),
+                transform: [
+                  {
+                    scale: palaceAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.5, 1.3],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Image
+              source={require("../../assets/images/fel.jpg")}
+              style={styles.palaceEffectImage}
+            />
+          </Animated.View>
+
+          {/* نجوم لامعة حول الصورة */}
+          {[0, 1, 2].map((i) => (
+            <Animated.View
+              key={i}
+              style={[
+                styles.palaceStar,
+                styles[`palaceStar${i + 1}` as "palaceStar1"],
+                {
+                  opacity: palaceAnim.interpolate({
+                    inputRange: [0, 0.3, 0.7, 1],
+                    outputRange: [0, 1, 1, 0],
+                  }),
+                  transform: [
+                    {
+                      scale: palaceAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.4, 1.2],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Ionicons name="star" size={20} color="#facc15" />
+            </Animated.View>
+          ))}
         </View>
       </Modal>
 
@@ -505,13 +909,13 @@ export default function TopupScreen({ onBack }: Props) {
             <Text style={styles.confirmTitle}>تأكيد شراء الذهب</Text>
             <View style={styles.confirmRow}>
               <Text style={styles.confirmLabel}>الذهب:</Text>
-              <Text style={styles.confirmValue}>{pendingAmount} G</Text>
+              <Text style={styles.confirmValue}>{pendingAmount} 🪙</Text>
             </View>
             {lastBonusPercent > 0 && (
               <View style={styles.confirmRow}>
                 <Text style={styles.confirmLabel}>مكافأة شحن ({lastBonusPercent}%):</Text>
                 <Text style={styles.confirmValue}>
-                  +{Math.round((pendingAmount * lastBonusPercent) / 100)} G
+                  +{Math.round((pendingAmount * lastBonusPercent) / 100)} 🪙
                 </Text>
               </View>
             )}
@@ -556,7 +960,7 @@ export default function TopupScreen({ onBack }: Props) {
             <View style={styles.totalLeft}>
               <View style={styles.coinBigOuter}>
                 <View style={styles.coinBigInner}>
-                  <Text style={styles.coinBigLetter}>G</Text>
+                  <Text style={styles.coinBigLetter}>🪙</Text>
                 </View>
               </View>
               <View>
@@ -594,7 +998,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -613,7 +1017,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -632,7 +1036,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -651,7 +1055,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -669,7 +1073,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -690,7 +1094,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -711,7 +1115,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -736,7 +1140,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -759,7 +1163,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -780,7 +1184,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -798,7 +1202,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -815,7 +1219,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -833,7 +1237,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -852,7 +1256,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -872,7 +1276,7 @@ export default function TopupScreen({ onBack }: Props) {
     <View style={styles.coin3DOuter}>
       <View style={styles.coin3DMiddle}>
         <View style={styles.coin3DInner}>
-          <Text style={styles.coin3DText}>G</Text>
+          <Text style={styles.coin3DText}>🪙</Text>
         </View>
       </View>
     </View>
@@ -1076,11 +1480,6 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1.5,
     borderColor: "#7c3aed",
-    shadowColor: "#000",
-    shadowOpacity: 0.45,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 12,
   },
 
   totalRow: {
@@ -1232,11 +1631,6 @@ coin3DMiddle: {
     backgroundColor: "rgba(15,23,42,0.95)",
     borderWidth: 1,
     borderColor: "rgba(250,204,21,0.45)",
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
   },
 
   offerAmount: {
@@ -1600,11 +1994,6 @@ coin3DMiddle: {
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
-    shadowColor: "#D4AF37",
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 12,
   },
   boxRewardsTitle: {
     fontSize: 26,
@@ -1618,6 +2007,26 @@ coin3DMiddle: {
     marginTop: 8,
     textAlign: "center",
   },
+  boxRewardsSubtitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    paddingHorizontal: 16,
+  },
+  boxRewardsSubtitleIcon: {
+    marginLeft: 8,
+  },
+  boxRewardsSubtitleText: {
+    fontSize: 14,
+    color: "#e9d5ff",
+    textAlign: "center",
+    flexShrink: 1,
+  },
+  boxRewardsSubtitleHighlight: {
+    color: "#facc15",
+    fontWeight: "800",
+  },
   boxRewardsCard: {
     borderRadius: 24,
     borderWidth: 1,
@@ -1630,6 +2039,81 @@ coin3DMiddle: {
     padding: 24,
     borderWidth: 1,
     borderColor: "rgba(212,175,55,0.2)",
+  },
+  royalSectionTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#fefce8",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  royalThrone: {
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  royalThroneBack: {
+    width: "100%",
+    maxWidth: 260,
+    height: 36,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    backgroundColor: "rgba(147,51,234,0.35)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,0.4)",
+  },
+  royalThroneSeat: {
+    marginTop: -6,
+    width: "100%",
+    maxWidth: 280,
+    paddingVertical: 16,
+    borderRadius: 24,
+    backgroundColor: "rgba(15,23,42,0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,0.6)",
+    alignItems: "center",
+  },
+  royalGiftsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    width: "100%",
+    paddingHorizontal: 12,
+  },
+  royalGiftItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  royalGiftCrystal: {
+    width: 62,
+    height: 62,
+    borderRadius: 34,
+    borderWidth: 2,
+    borderColor: "rgba(244,244,245,0.7)",
+    backgroundColor: "rgba(56,189,248,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  royalGiftInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(15,23,42,0.95)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  royalGiftImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 26,
+  },
+  royalGiftEmoji: {
+    fontSize: 26,
+  },
+  royalGiftLabel: {
+    marginTop: 8,
+    fontSize: 11,
+    color: "#e5e7eb",
+    textAlign: "center",
   },
   boxRewardsBoxRow: {
     flexDirection: "row",
@@ -1647,11 +2131,6 @@ coin3DMiddle: {
     justifyContent: "center",
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.4)",
-    shadowColor: "#D4AF37",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
   },
   boxRewardBoxLabel: {
     fontSize: 14,
@@ -1663,5 +2142,301 @@ coin3DMiddle: {
     color: "#c4b5fd",
     lineHeight: 22,
     textAlign: "center",
+  },
+  throneSection: {
+    marginTop: 24,
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  throneImage: {
+    width: "100%",
+    height: 220,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  throneImageInner: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  throneCenter: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+  },
+  throneBoxLottie: {
+    width: 120,
+    height: 120,
+  },
+  throneButton: {
+    marginTop: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(250,204,21,0.95)",
+  },
+  throneButtonText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#1f2937",
+  },
+  winnersCard: {
+    borderRadius: 24,
+    backgroundColor: "rgba(15,23,42,0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(96,165,250,0.8)",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    marginBottom: 16,
+  },
+  winnersHeader: {
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+    alignSelf: "center",
+    marginBottom: 10,
+  },
+  winnersHeaderText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#f9fafb",
+  },
+  winnersRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  winnerItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  winnerItemCenter: {
+    transform: [{ translateY: -6 }],
+  },
+  winnerAvatarOuter: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  winnerAvatarInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(15,23,42,0.96)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "rgba(251,191,36,0.9)",
+  },
+  winnerAvatarInnerBig: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+    marginTop: 4,
+  },
+  winnerName: {
+    fontSize: 11,
+    color: "#e5e7eb",
+    textAlign: "center",
+  },
+  winnerFireFrame: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  winnerFireFrameImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 30,
+  },
+  rewardsSection: {
+    marginTop: 24,
+    gap: 16,
+  },
+  rewardsTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#e5e7eb",
+    alignSelf: "center",
+    marginBottom: 4,
+  },
+  rewardsBoxCard: {
+    borderRadius: 20,
+    backgroundColor: "rgba(15,23,42,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(129,140,248,0.6)",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+  },
+  rewardsBoxHeader: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(59,130,246,0.7)",
+    marginBottom: 10,
+  },
+  rewardsBoxHeaderText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#f9fafb",
+  },
+  rewardsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  advancedRowWrapper: {
+    marginTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 4,
+  },
+  advancedRow: {
+    flexDirection: "row",
+    paddingHorizontal: 4,
+  },
+  rewardItem: {
+    flex: 1,
+    marginHorizontal: 4,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: "rgba(30,64,175,0.7)",
+    borderWidth: 1,
+    borderColor: "rgba(191,219,254,0.6)",
+  },
+  advancedRewardItem: {
+    width: 90,
+    alignItems: "center",
+    paddingVertical: 10,
+    marginHorizontal: 4,
+    borderRadius: 16,
+    backgroundColor: "rgba(15,23,42,0.95)",
+    borderWidth: 2,
+    borderColor: "rgba(56,189,248,0.8)",
+  },
+  advancedRewardIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    backgroundColor: "rgba(37,99,235,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  rewardItemIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: "rgba(15,23,42,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  rewardItemEmoji: {
+    fontSize: 22,
+  },
+  rewardItemLabel: {
+    fontSize: 11,
+    color: "#e5e7eb",
+    textAlign: "center",
+  },
+  rewardItemCount: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#bfdbfe",
+  },
+  bouquetEffectOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  bouquetEffectBubble: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    overflow: "visible",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bouquetEffectBubbleInner: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 80,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "rgba(253,224,71,0.9)",
+  },
+  bouquetEffectEmojiText: {
+    fontSize: 52,
+  },
+  bouquetStar: {
+    position: "absolute",
+  },
+  bouquetStar1: {
+    top: "30%",
+    right: "20%",
+  },
+  bouquetStar2: {
+    top: "55%",
+    left: "18%",
+  },
+  bouquetStar3: {
+    bottom: "25%",
+    right: "40%",
+  },
+  palaceEffectOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  palaceEffectImageWrap: {
+    width: "160%",
+    height: "80%",
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "rgba(250,204,21,0.8)",
+  },
+  palaceEffectImage: {
+    width: "100%",
+    height: "100%",
+  },
+  palaceStar: {
+    position: "absolute",
+  },
+  palaceStar1: {
+    top: "35%",
+    right: "20%",
+  },
+  palaceStar2: {
+    top: "55%",
+    left: "22%",
+  },
+  palaceStar3: {
+    bottom: "30%",
+    right: "45%",
   },
 });
