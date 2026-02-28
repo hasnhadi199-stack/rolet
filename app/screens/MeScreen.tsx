@@ -68,10 +68,13 @@ type Props = {
   onEditProfile: () => void;
   onOpenInfoPage: () => void;
   onOpenTopup: () => void;
+  onOpenAdmirers: () => void;
+  onOpenFollowing: () => void;
+  onOpenFriends: () => void;
   onLogout: () => void;
 };
 
-export default function MeScreen({ user, onEditProfile, onOpenInfoPage, onOpenTopup, onLogout }: Props) {
+export default function MeScreen({ user, onEditProfile, onOpenInfoPage, onOpenTopup, onOpenAdmirers, onOpenFollowing, onOpenFriends, onLogout }: Props) {
   const { show } = useAppAlert();
   const deviceCountry = getDeviceCountryCode();
   const countryCode = user.country || deviceCountry || "";
@@ -164,20 +167,20 @@ export default function MeScreen({ user, onEditProfile, onOpenInfoPage, onOpenTo
       <View style={styles.order}>
         <View style={[styles.statsCard, CARD_SHADOW]}>
           <View style={styles.statsRow}>
-            <View style={styles.statItem}>
+            <TouchableOpacity style={styles.statItem} onPress={onOpenFriends} activeOpacity={0.7}>
               <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>صديق</Text>
-            </View>
+            </TouchableOpacity>
             <View style={styles.statDivider} />
-            <View style={styles.statItem}>
+            <TouchableOpacity style={styles.statItem} onPress={onOpenFollowing} activeOpacity={0.7}>
               <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>أتابع</Text>
-            </View>
+            </TouchableOpacity>
             <View style={styles.statDivider} />
-            <View style={styles.statItem}>
+            <TouchableOpacity style={styles.statItem} onPress={onOpenAdmirers} activeOpacity={0.7}>
               <Text style={styles.statNumber}>{likeCount}</Text>
               <Text style={styles.statLabel}>معجب</Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 

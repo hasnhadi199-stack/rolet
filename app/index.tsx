@@ -23,6 +23,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Localization from "expo-localization";
 import { checkAuthStatus, API_BASE_URL } from "../utils/authHelper";
 import { getFlagEmoji, getCountryName } from "../utils/countries";
+import type { UserSearchResult } from "../utils/usersApi";
 import HomeScreen from "./screens/HomeScreen";
 import MeScreen from "./screens/MeScreen";
 import InfoScreen from "./screens/InfoScreen";
@@ -31,6 +32,9 @@ import ClubScreen from "./screens/ClubScreen";
 import MomentScreen from "./screens/MomentScreen";
 import { AppAlertProvider } from "./components/AppAlertProvider";
 import TopupScreen from "./screens/TopupScreen";
+import SocialListScreen from "./screens/SocialListScreen";
+import SearchScreen from "./screens/SearchScreen";
+import UserProfileScreen from "./screens/UserProfileScreen";
 
 const { width } = Dimensions.get("window");
 
@@ -517,12 +521,20 @@ function MainTabsScreen({
   onEditProfile,
   onOpenInfoPage,
   onOpenTopup,
+  onOpenAdmirers,
+  onOpenFollowing,
+  onOpenFriends,
+  onOpenSearch,
   onLogout,
 }: {
   user: NonNullable<User>;
   onEditProfile: () => void;
   onOpenInfoPage: () => void;
   onOpenTopup: () => void;
+  onOpenAdmirers: () => void;
+  onOpenFollowing: () => void;
+  onOpenFriends: () => void;
+  onOpenSearch: () => void;
   onLogout: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("home");
@@ -531,7 +543,11 @@ function MainTabsScreen({
     <View style={styles.tabsContainer}>
       <View style={styles.tabsContent}>
         {activeTab === "home" && (
-          <HomeScreen userName={user.name || ""} onNavigate={(t) => setActiveTab(t as TabId)} />
+          <HomeScreen
+            userName={user.name || ""}
+            onNavigate={(t) => setActiveTab(t as TabId)}
+            onOpenSearch={onOpenSearch}
+          />
         )}
         {activeTab === "me" && (
           <MeScreen
@@ -539,6 +555,9 @@ function MainTabsScreen({
             onEditProfile={onEditProfile}
             onOpenInfoPage={onOpenInfoPage}
             onOpenTopup={onOpenTopup}
+            onOpenAdmirers={onOpenAdmirers}
+            onOpenFollowing={onOpenFollowing}
+            onOpenFriends={onOpenFriends}
             onLogout={onLogout}
           />
         )}
@@ -574,6 +593,9 @@ export default function Page() {
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showInfoPage, setShowInfoPage] = useState(false);
   const [showTopupPage, setShowTopupPage] = useState(false);
+  const [socialListType, setSocialListType] = useState<"admirers" | "following" | "friends" | null>(null);
+  const [showSearchPage, setShowSearchPage] = useState(false);
+  const [selectedSearchUser, setSelectedSearchUser] = useState<UserSearchResult | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const pinRefs = useRef<(TextInput | null)[]>([]);
@@ -891,6 +913,40 @@ export default function Page() {
         </AppAlertProvider>
       );
     }
+    if (socialListType) {
+      return (
+        <AppAlertProvider>
+          <SocialListScreen
+            type={socialListType}
+            onBack={() => setSocialListType(null)}
+            onSwitchType={setSocialListType}
+          />
+        </AppAlertProvider>
+      );
+    }
+    if (showSearchPage) {
+      if (selectedSearchUser) {
+        return (
+          <AppAlertProvider>
+            <UserProfileScreen
+              user={selectedSearchUser}
+              onBack={() => setSelectedSearchUser(null)}
+            />
+          </AppAlertProvider>
+        );
+      }
+      return (
+        <AppAlertProvider>
+          <SearchScreen
+            onBack={() => {
+              setShowSearchPage(false);
+              setSelectedSearchUser(null);
+            }}
+            onUserPress={(u: UserSearchResult) => setSelectedSearchUser(u)}
+          />
+        </AppAlertProvider>
+      );
+    }
     return (
       <AppAlertProvider>
         <MainTabsScreen
@@ -898,6 +954,10 @@ export default function Page() {
           onEditProfile={() => setShowProfileEdit(true)}
           onOpenInfoPage={() => setShowInfoPage(true)}
           onOpenTopup={() => setShowTopupPage(true)}
+          onOpenAdmirers={() => setSocialListType("admirers")}
+          onOpenFollowing={() => setSocialListType("following")}
+          onOpenFriends={() => setSocialListType("friends")}
+          onOpenSearch={() => setShowSearchPage(true)}
           onLogout={handleLogout}
         />
       </AppAlertProvider>
