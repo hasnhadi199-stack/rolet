@@ -13,6 +13,8 @@ export type UserSearchResult = {
   age: number | null;
   country: string;
   gender: string;
+  height?: number | null;
+  weight?: number | null;
 };
 
 export async function searchUsersById(query: string): Promise<UserSearchResult[]> {
