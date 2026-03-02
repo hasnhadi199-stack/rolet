@@ -174,6 +174,7 @@ export default function ChatScreen({ me, other, onBack }: Props) {
           </View>
         </View>
       </View>
+      </View>
     </KeyboardAvoidingView>
   );
 }
