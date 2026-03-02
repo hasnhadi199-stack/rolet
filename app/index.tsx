@@ -528,6 +528,7 @@ function MainTabsScreen({
   onOpenFriends,
   onOpenSearch,
   onLogout,
+  onOpenChat,
 }: {
   user: NonNullable<User>;
   onEditProfile: () => void;
@@ -538,6 +539,7 @@ function MainTabsScreen({
   onOpenFriends: () => void;
   onOpenSearch: () => void;
   onLogout: () => void;
+  onOpenChat: (user: UserSearchResult) => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("home");
 
@@ -563,7 +565,7 @@ function MainTabsScreen({
             onLogout={onLogout}
           />
         )}
-        {activeTab === "messages" && <MessagesScreen />}
+        {activeTab === "messages" && <MessagesScreen onOpenChat={onOpenChat} />}
         {activeTab === "club" && <ClubScreen />}
         {activeTab === "moment" && <MomentScreen user={user} />}
       </View>
@@ -1002,6 +1004,7 @@ export default function Page() {
           onOpenFriends={() => setSocialListType("friends")}
           onOpenSearch={() => setShowSearchPage(true)}
           onLogout={handleLogout}
+          onOpenChat={(u: UserSearchResult) => setSelectedChatUser(u)}
         />
       </AppAlertProvider>
     );

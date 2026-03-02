@@ -1,11 +1,16 @@
 import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView } from "react-native";
 import { useEffect, useState } from "react";
 import { fetchInbox, type InboxItem } from "../../utils/messagesApi";
+import type { UserSearchResult } from "../../utils/usersApi";
 
 const TEXT_LIGHT = "#f5f3ff";
 const TEXT_MUTED = "#a1a1aa";
 
-export default function MessagesScreen() {
+type Props = {
+  onOpenChat: (user: UserSearchResult) => void;
+};
+
+export default function MessagesScreen({ onOpenChat }: Props) {
   const [items, setItems] = useState<InboxItem[]>([]);
 
   useEffect(() => {
@@ -20,7 +25,21 @@ export default function MessagesScreen() {
       ) : (
         <ScrollView>
           {items.map((m) => (
-            <TouchableOpacity key={m.id} style={styles.row} activeOpacity={0.8}>
+            <TouchableOpacity
+              key={m.id}
+              style={styles.row}
+              activeOpacity={0.8}
+              onPress={() =>
+                onOpenChat({
+                  id: m.otherId,
+                  name: m.otherName,
+                  profileImage: m.otherProfileImage,
+                  age: null,
+                  country: "",
+                  gender: "",
+                })
+              }
+            >
               {m.otherProfileImage ? (
                 <Image source={{ uri: m.otherProfileImage }} style={styles.avatar} />
               ) : (

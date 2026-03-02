@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, TouchableOpacity, Image, TextInput, Platform, ScrollView } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, Image, TextInput, Platform, ScrollView, KeyboardAvoidingView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { UserSearchResult } from "../../utils/usersApi";
 import { useEffect, useRef, useState } from "react";
@@ -55,39 +55,44 @@ export default function ChatScreen({ me, other, onBack }: Props) {
     }
   };
   return (
-    <View style={styles.container}>
-      {/* Header مع الصورتين و ID */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={TEXT_LIGHT} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <View style={styles.avatarsRow}>
-            {me?.profileImage ? (
-              <Image source={{ uri: me.profileImage }} style={styles.headerAvatarSmall} />
-            ) : (
-              <View style={[styles.headerAvatarSmall, styles.avatarPlaceholder]}>
-                <Ionicons name="person" size={18} color={TEXT_MUTED} />
-              </View>
-            )}
-            {other.profileImage ? (
-              <Image source={{ uri: other.profileImage }} style={styles.headerAvatarSmall} />
-            ) : (
-              <View style={[styles.headerAvatarSmall, styles.avatarPlaceholder]}>
-                <Ionicons name="person" size={18} color={TEXT_MUTED} />
-              </View>
-            )}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
+    >
+      <View style={styles.container}>
+        {/* Header مع الصورتين و ID */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.8}>
+            <Ionicons name="arrow-back" size={22} color={TEXT_LIGHT} />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <View style={styles.avatarsRow}>
+              {me?.profileImage ? (
+                <Image source={{ uri: me.profileImage }} style={styles.headerAvatarSmall} />
+              ) : (
+                <View style={[styles.headerAvatarSmall, styles.avatarPlaceholder]}>
+                  <Ionicons name="person" size={18} color={TEXT_MUTED} />
+                </View>
+              )}
+              {other.profileImage ? (
+                <Image source={{ uri: other.profileImage }} style={styles.headerAvatarSmall} />
+              ) : (
+                <View style={[styles.headerAvatarSmall, styles.avatarPlaceholder]}>
+                  <Ionicons name="person" size={18} color={TEXT_MUTED} />
+                </View>
+              )}
+            </View>
+            <Text style={styles.otherName} numberOfLines={1}>
+              {other.name}
+            </Text>
+            <Text style={styles.otherId}>{other.id}</Text>
           </View>
-          <Text style={styles.otherName} numberOfLines={1}>
-            {other.name}
-          </Text>
-          <Text style={styles.otherId}>{other.id}</Text>
+          <View style={{ width: 32 }} />
         </View>
-        <View style={{ width: 32 }} />
-      </View>
 
-      {/* محتوى المحادثة */}
-      <ScrollView style={styles.messagesContainer} ref={scrollRef}>
+        {/* محتوى المحادثة */}
+        <ScrollView style={styles.messagesContainer} ref={scrollRef}>
         {messages.map((m) => {
           const isMine = m.fromId === me?.id;
           return (
@@ -141,6 +146,13 @@ export default function ChatScreen({ me, other, onBack }: Props) {
             returnKeyType="send"
             onSubmitEditing={handleSend}
           />
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={handleSend}
+            disabled={!text.trim()}
+          >
+            <Ionicons name="send" size={22} color={text.trim() ? "#4ade80" : TEXT_MUTED} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.bottomActions}>
@@ -159,17 +171,10 @@ export default function ChatScreen({ me, other, onBack }: Props) {
             <TouchableOpacity activeOpacity={0.8}>
               <Ionicons name="gift-outline" size={22} color="#fbbf24" />
             </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={handleSend}
-              disabled={!text.trim()}
-            >
-              <Ionicons name="send" size={22} color={text.trim() ? "#4ade80" : TEXT_MUTED} />
-            </TouchableOpacity>
           </View>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -283,7 +288,7 @@ const styles = StyleSheet.create({
   },
   inputArea: {
     paddingHorizontal: 12,
-    paddingVertical: 48,
+    paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: "rgba(15,23,42,0.9)",
     backgroundColor: BG,
@@ -317,10 +322,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
   },
   textInput: {
+    flex: 1,
     minHeight: 22,
-    maxHeight: 50,
+    maxHeight: 80,
     color: TEXT_LIGHT,
     textAlignVertical: "center",
   },
