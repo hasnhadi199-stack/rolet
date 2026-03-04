@@ -25,6 +25,14 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BUBBLE_MAX_WIDTH = SCREEN_WIDTH * 0.64;
 const MAX_VOICE_SEC = 30;
 
+// صفوف الإيموجي الظاهرة في لوحة الإيموجي
+// ✌️ سيتم استخدامها لتشغيل لعبة حجر-ورقة-مقص
+// 🎲 سيتم استخدامها لتشغيل نرد عشوائي
+const EMOJI_ROWS: string[][] = [
+  ["😘", "🤣", "🌹", "✌️", "🙂", "😂"],
+  ["😊", "🥲", "🥰", "😉", "😁", "😄"],
+  ["😅", "😆", "😎", "🙂", "😃", "🎲"],
+];
 
 function fmtDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -34,7 +42,12 @@ function fmtDuration(sec: number): string {
 
 export default function ChatScreen({ me, other, onBack }: Props) {
   type LocalStatus = "sending" | "sent" | "failed";
-  type LocalChatMessage = ChatMessage & { status?: LocalStatus; replyToText?: string | null };
+  type LocalChatMessage = ChatMessage & {
+    status?: LocalStatus;
+    replyToText?: string | null;
+    specialType?: "dice" | "rps";
+    specialAnimating?: boolean;
+  };
   const [messages, setMessages] = useState<LocalChatMessage[]>([]);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<LocalChatMessage | null>(null);
@@ -44,6 +57,7 @@ export default function ChatScreen({ me, other, onBack }: Props) {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [playbackPosition, setPlaybackPosition] = useState<number>(0);
   const [loadingVoiceId, setLoadingVoiceId] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -219,6 +233,143 @@ export default function ChatScreen({ me, other, onBack }: Props) {
     await deleteMessage(messageId);
   };
 
+  const handleToggleEmoji = () => {
+    setShowEmojiPicker((prev) => !prev);
+  };
+
+  const handleSendDice = useCallback(() => {
+    if (!me?.id) return;
+    const faces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+    const id = `local-dice-${Date.now()}`;
+    const optimistic: LocalChatMessage = {
+      id,
+      fromId: me.id,
+      toId: other.id,
+      text: "🎲",
+      createdAt: new Date().toISOString(),
+      status: "sending",
+      specialType: "dice",
+      specialAnimating: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
+
+    const totalSteps = 18; // ~2 ثانية (18 * 110ms)
+    const finalIndex = Math.floor(Math.random() * faces.length);
+
+    const spin = (step: number) => {
+      if (step < totalSteps) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? { ...m, text: faces[step % faces.length] }
+              : m
+          )
+        );
+        setTimeout(() => spin(step + 1), 110);
+      } else {
+        const face = faces[finalIndex];
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? { ...m, text: face, specialAnimating: false }
+              : m
+          )
+        );
+        // إرسال النتيجة النهائية إلى الباك إند
+        void (async () => {
+          const sent = await sendMessage(other.id, face, null);
+          if (sent) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === id ? { ...sent, status: "sent" } : m))
+            );
+          } else {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === id ? { ...m, status: "failed" } : m
+              )
+            );
+          }
+        })();
+      }
+    };
+
+    spin(0);
+  }, [me?.id, other.id]);
+
+  const handleSendRps = useCallback(() => {
+    if (!me?.id) return;
+    const variants = ["✊", "✋", "✌️"];
+    const id = `local-rps-${Date.now()}`;
+    const optimistic: LocalChatMessage = {
+      id,
+      fromId: me.id,
+      toId: other.id,
+      text: "✊",
+      createdAt: new Date().toISOString(),
+      status: "sending",
+      specialType: "rps",
+      specialAnimating: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
+
+    const totalSteps = 12;
+    const finalIndex = Math.floor(Math.random() * variants.length);
+
+    const spin = (step: number) => {
+      if (step < totalSteps) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? { ...m, text: variants[step % variants.length] }
+              : m
+          )
+        );
+        setTimeout(() => spin(step + 1), 110);
+      } else {
+        const final = variants[finalIndex];
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? { ...m, text: final, specialAnimating: false }
+              : m
+          )
+        );
+        void (async () => {
+          const sent = await sendMessage(other.id, final, null);
+          if (sent) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === id ? { ...sent, status: "sent" } : m))
+            );
+          } else {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === id ? { ...m, status: "failed" } : m
+              )
+            );
+          }
+        })();
+      }
+    };
+
+    spin(0);
+  }, [me?.id, other.id]);
+
+  const handlePickEmoji = (emoji: string) => {
+    if (emoji === "🎲") {
+      setShowEmojiPicker(false);
+      void handleSendDice();
+      return;
+    }
+    if (emoji === "✌️") {
+      setShowEmojiPicker(false);
+      void handleSendRps();
+      return;
+    }
+    setText((prev) => (prev || "") + emoji);
+  };
+
   const handlePlayVoice = useCallback(async (msg: LocalChatMessage) => {
     if (!msg.audioUrl) return;
     if (playingId === msg.id) {
@@ -302,6 +453,7 @@ export default function ChatScreen({ me, other, onBack }: Props) {
   const renderBubbleContent = (m: LocalChatMessage, isMine: boolean, status: LocalStatus) => {
     const isVoice = !!m.audioUrl;
     const dur = m.audioDurationSeconds ?? 0;
+
     if (isVoice) {
       const loading = loadingVoiceId === m.id;
       return (
@@ -469,11 +621,31 @@ export default function ChatScreen({ me, other, onBack }: Props) {
               onChangeText={setText}
               returnKeyType="send"
               onSubmitEditing={handleSend}
+              onFocus={() => setShowEmojiPicker(false)}
             />
             <TouchableOpacity onPress={handleSend} disabled={!text.trim()} activeOpacity={0.8}>
               <Ionicons name="send" size={22} color={text.trim() ? "#4ade80" : TEXT_MUTED} />
             </TouchableOpacity>
           </View>
+
+          {showEmojiPicker && (
+            <View style={styles.emojiPanel}>
+              {EMOJI_ROWS.map((row, idx) => (
+                <View key={idx} style={styles.emojiRow}>
+                  {row.map((emoji) => (
+                    <TouchableOpacity
+                      key={emoji}
+                      style={styles.emojiBtn}
+                      activeOpacity={0.8}
+                      onPress={() => handlePickEmoji(emoji)}
+                    >
+                      <Text style={styles.emojiText}>{emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ))}
+            </View>
+          )}
 
           <View style={styles.bottomActions}>
             <View style={styles.leftActions}>
@@ -488,7 +660,7 @@ export default function ChatScreen({ me, other, onBack }: Props) {
                   <Ionicons name="mic" size={22} color="#60a5fa" />
                 )}
               </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.8}>
+              <TouchableOpacity activeOpacity={0.8} onPress={handleToggleEmoji}>
                 <Ionicons name="happy-outline" size={22} color={TEXT_MUTED} />
               </TouchableOpacity>
             </View>
@@ -636,6 +808,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   textInput: { flex: 1, minHeight: 22, maxHeight: 80, color: TEXT_LIGHT, textAlignVertical: "center" },
+  emojiPanel: {
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.45)",
+    gap: 4,
+  },
+  emojiRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginVertical: 2,
+  },
+  emojiBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  emojiText: {
+    fontSize: 24,
+  },
   bottomActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -667,4 +862,23 @@ const styles = StyleSheet.create({
   replyBarLine: { width: 2, height: 18, borderRadius: 999, backgroundColor: "#a855f7" },
   replyBarLabel: { fontSize: 11, color: TEXT_MUTED },
   replyBarText: { flex: 1, fontSize: 12, color: TEXT_LIGHT },
+  specialBubbleCenter: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  diceEmoji: {
+    fontSize: 32,
+  },
+  diceLottie: {
+    width: 120,
+    height: 120,
+  },
+  rpsEmoji: {
+    fontSize: 32,
+  },
+  specialHint: {
+    fontSize: 10,
+    color: TEXT_MUTED,
+  },
 });
