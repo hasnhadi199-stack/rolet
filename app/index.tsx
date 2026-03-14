@@ -45,6 +45,7 @@ import PrivilegesScreen from "./screens/PrivilegesScreen";
 import SocialListScreen from "./screens/SocialListScreen";
 import VisitorsScreen from "./screens/VisitorsScreen";
 import GroupChatScreen from "./screens/GroupChatScreen";
+import GroupChatUsersScreen from "./screens/GroupChatUsersScreen";
 import GroupChatMiniFloating from "../components/GroupChatMiniFloating";
 import { CheckInContinuousModal } from "../components/CheckInContinuousModal";
 import SearchScreen from "./screens/SearchScreen";
@@ -666,6 +667,7 @@ export default function Page() {
   const [showTaskCenterPage, setShowTaskCenterPage] = useState(false);
   const [showDecorationsPage, setShowDecorationsPage] = useState(false);
   const [showGroupChatPage, setShowGroupChatPage] = useState(false);
+  const [showGroupChatUsersPage, setShowGroupChatUsersPage] = useState(false);
   const [showGroupChatMini, setShowGroupChatMini] = useState(false);
   const [userDismissedGroupChatMini, setUserDismissedGroupChatMini] = useState(false);
   const [groupChatSelectedSlot, setGroupChatSelectedSlot] = useState<string | null>(null);
@@ -1460,6 +1462,7 @@ export default function Page() {
                   onSelectedSlotChange={setGroupChatSelectedSlot}
                   onBack={() => {
                     setShowGroupChatPage(false);
+                    setShowGroupChatUsersPage(false);
                     setShowGroupChatMini(true);
                     leaveGroupChat().catch(() => {});
                   }}
@@ -1468,7 +1471,13 @@ export default function Page() {
                     setShowGroupChatPage(false);
                     setShowTopupPage(true);
                   }}
+                  onOpenUsers={() => setShowGroupChatUsersPage(true)}
                 />
+              </View>
+            )}
+            {showGroupChatUsersPage && (
+              <View style={[StyleSheet.absoluteFill, { zIndex: 10000 }]}>
+                <GroupChatUsersScreen onBack={() => setShowGroupChatUsersPage(false)} />
               </View>
             )}
             {showGroupChatMini && !showGroupChatPage && (
