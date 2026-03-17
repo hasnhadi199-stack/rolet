@@ -36,7 +36,7 @@ function getImageUrl(url: string | null | undefined): string {
 
 const BG_DARK = "#1a1625";
 const TEXT_LIGHT = "#f5f3ff";
-const BUBBLE_WIDTH = Math.min(280, Dimensions.get("window").width * 0.82);
+const BUBBLE_WIDTH = Math.min(260, Dimensions.get("window").width * 0.78);
 
 type UserInfo = { id?: string; name?: string; profileImage?: string };
 type SlotInfo = { userId: string; name?: string; profileImage?: string | null };
@@ -275,7 +275,7 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
               const chargedGold = item.fromChargedGold ?? 0;
               return (
                 <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
-                  <View style={styles.msgSenderCol}>
+                  <View style={[styles.msgSenderCol, isMe && styles.msgSenderColMe]}>
                     <View style={styles.msgImageNameRow}>
                       {item.fromProfileImage ? (
                         <Image source={{ uri: getImageUrl(item.fromProfileImage) }} style={styles.msgAvatarSquare} />
@@ -284,23 +284,25 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
                           <Ionicons name="person" size={12} color={TEXT_MUTED} />
                         </View>
                       )}
-                      <Text style={styles.msgSenderName} numberOfLines={1}>
-                        {item.fromName}
-                      </Text>
-                    </View>
-                    <View style={styles.msgGemsRow}>
-                      <View style={styles.msgGemItem}>
-                        <Ionicons name="diamond" size={10} color="#60a5fa" />
-                        <Text style={styles.msgGemCount}>{Number(diamonds).toFixed(1)}</Text>
-                      </View>
-                      <View style={styles.msgGemItem}>
-                        <Ionicons name="diamond" size={10} color="#f472b6" />
-                        <Text style={styles.msgGemCount}>{Number(chargedGold).toFixed(0)}</Text>
+                      <View style={styles.msgNameGemsCol}>
+                        <Text style={styles.msgSenderName} numberOfLines={1}>
+                          {item.fromName}
+                        </Text>
+                        <View style={styles.msgGemsRow}>
+                          <View style={styles.msgGemItem}>
+                            <Ionicons name="diamond" size={10} color="#60a5fa" />
+                            <Text style={styles.msgGemCount}>{diamonds === 0 ? "0" : Number(diamonds).toFixed(1)}</Text>
+                          </View>
+                          <View style={styles.msgGemItem}>
+                            <Ionicons name="diamond" size={10} color="#f472b6" />
+                            <Text style={styles.msgGemCount}>{Number(chargedGold)}</Text>
+                          </View>
+                        </View>
                       </View>
                     </View>
                     <View style={[styles.msgBubble, isMe && styles.msgBubbleMe]}>
-                      <Text style={styles.msgText}>{item.text}</Text>
-                      <Text style={styles.msgTime}>
+                      <Text style={[styles.msgText, isMe ? styles.msgTextMe : styles.msgTextOther]}>{item.text}</Text>
+                      <Text style={[styles.msgTime, isMe ? styles.msgTimeMe : styles.msgTimeOther]}>
                         {item.createdAt ? new Date(item.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : ""}
                       </Text>
                     </View>
@@ -482,10 +484,17 @@ const styles = StyleSheet.create({
     gap: 8,
     width: BUBBLE_WIDTH,
   },
+  msgSenderColMe: {
+    alignItems: "flex-end",
+  },
   msgImageNameRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  msgNameGemsCol: {
+    flexDirection: "column",
+    gap: 4,
   },
   msgAvatarSquare: {
     width: 36,
@@ -517,25 +526,29 @@ const styles = StyleSheet.create({
   msgBubble: {
     width: "100%",
     alignSelf: "stretch",
-    backgroundColor: "rgba(30, 27, 45, 0.95)",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "rgba(167, 139, 250, 0.2)",
+    borderColor: "rgba(0,0,0,0.06)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   msgBubbleMe: {
-    backgroundColor: "rgba(139, 92, 246, 0.2)",
-    borderColor: "rgba(167, 139, 250, 0.35)",
+    backgroundColor: "#7c3aed",
+    borderColor: "rgba(124, 58, 237, 0.5)",
   },
   msgName: { fontSize: 11, color: ACCENT, marginBottom: 2 },
-  msgText: { fontSize: 15, color: TEXT_LIGHT, lineHeight: 22 },
-  msgTime: { fontSize: 11, color: TEXT_MUTED, marginTop: 6 },
+  msgText: { fontSize: 13, lineHeight: 19 },
+  msgTextMe: { color: "#ffffff" },
+  msgTextOther: { color: "#1f2937" },
+  msgTime: { fontSize: 10, marginTop: 4 },
+  msgTimeMe: { color: "rgba(255,255,255,0.85)" },
+  msgTimeOther: { color: "rgba(0,0,0,0.5)" },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
