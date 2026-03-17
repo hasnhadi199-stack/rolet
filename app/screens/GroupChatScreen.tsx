@@ -338,7 +338,7 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
             returnKeyType="send"
           />
           <TouchableOpacity style={styles.sendBtn} onPress={handleSend} activeOpacity={0.8}>
-            <Ionicons name="send" size={20} color="#fff" />
+            <Ionicons name="send" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -539,8 +539,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   msgBubbleMe: {
-    backgroundColor: "#7c3aed",
-    borderColor: "rgba(124, 58, 237, 0.5)",
+    backgroundColor: ACCENT,
+    borderColor: "rgba(167, 139, 250, 0.5)",
   },
   msgName: { fontSize: 11, color: ACCENT, marginBottom: 2 },
   msgText: { fontSize: 13, lineHeight: 19 },
@@ -552,9 +552,10 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 8,
-    paddingBottom: Platform.OS === "ios" ? 28 : 76,
-    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingBottom: Platform.OS === "ios" ? 26 : 74,
+    gap: 6,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.06)",
     backgroundColor: BG_DARK,
@@ -562,18 +563,18 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     backgroundColor: CARD_BG,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 15,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontSize: 14,
     color: TEXT_LIGHT,
     borderWidth: 1,
     borderColor: "rgba(167, 139, 250, 0.2)",
   },
   sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: ACCENT,
     alignItems: "center",
     justifyContent: "center",
