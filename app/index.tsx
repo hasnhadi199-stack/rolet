@@ -33,8 +33,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
 import * as Localization from "expo-localization";
-import { checkAuthStatus, API_BASE_URL } from "../utils/authHelper";
+import { checkAuthStatus, checkAuthStatusQuick, API_BASE_URL } from "../utils/authHelper";
 import { leaveGroupChat, fetchGroupChatSlots } from "../utils/messagesApi";
+import { preloadAppCache } from "../utils/cachePreload";
 import { registerPushTokenWithBackend, notifyFriendsOnline, notifyOffline, setupNotificationResponseListener } from "../utils/pushNotifications";
 import { getFlagEmoji, getCountryName } from "../utils/countries";
 import type { UserSearchResult } from "../utils/usersApi";
@@ -601,6 +602,10 @@ function MainTabsScreen({
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "home");
 
   useEffect(() => {
+    preloadAppCache();
+  }, []);
+
+  useEffect(() => {
     if (initialTab) {
       setActiveTab(initialTab);
       onTabRestored?.();
@@ -611,17 +616,29 @@ function MainTabsScreen({
     if (activeTab === "messages") onMessagesTabActive?.();
   }, [activeTab, onMessagesTabActive]);
 
+  const hidden = {
+    position: "absolute" as const,
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    opacity: 0,
+    pointerEvents: "none" as const,
+    zIndex: 0,
+  };
+  const visible = { flex: 1, zIndex: 1 };
+
   return (
     <View style={[styles.tabsContainer, { backgroundColor: theme.bg }]}>
       <View style={styles.tabsContent}>
-        {activeTab === "home" && (
+        <View style={activeTab === "home" ? visible : hidden}>
           <HomeScreen
             userName={user.name || ""}
             onNavigate={(t) => setActiveTab(t as TabId)}
             onOpenSearch={onOpenSearch}
           />
-        )}
-        {activeTab === "me" && (
+        </View>
+        <View style={activeTab === "me" ? visible : hidden}>
           <MeScreen
             user={user}
             onEditProfile={onEditProfile}
@@ -638,12 +655,16 @@ function MainTabsScreen({
             onOpenFollowing={onOpenFollowing}
             onOpenFriends={onOpenFriends}
           />
-        )}
-        {activeTab === "messages" && (
+        </View>
+        <View style={activeTab === "messages" ? visible : hidden}>
           <MessagesScreen onOpenChat={onOpenChat} onOpenGroupChat={onOpenGroupChat} />
-        )}
-        {activeTab === "club" && <ClubScreen />}
-        {activeTab === "moment" && <MomentScreen user={user} onWalletUpdate={onWalletUpdate} />}
+        </View>
+        <View style={activeTab === "club" ? visible : hidden}>
+          <ClubScreen />
+        </View>
+        <View style={activeTab === "moment" ? visible : hidden}>
+          <MomentScreen user={user} onWalletUpdate={onWalletUpdate} />
+        </View>
       </View>
       <View style={styles.tabBar}>
         {TABS.map((tab) => (
@@ -725,34 +746,45 @@ export default function Page() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const pinRefs = useRef<(TextInput | null)[]>([]);
 
-  // ——— التحقق من الجلسة عند فتح التطبيق (يبقى مسجّل بعد الإغلاق أو إعادة التحميل) ———
+  // ——— تحقق سريع من AsyncStorage أولاً — عرض التطبيق فوراً ———
   useEffect(() => {
-    checkAuthStatus().then(setAuthResult);
+    checkAuthStatusQuick().then((r) => {
+      setAuthResult(r);
+      if (r.authenticated && r.user) {
+        setUser(r.user as User);
+        setAuthState("main");
+      } else {
+        setAuthState("email");
+      }
+    });
   }, []);
 
-  // ——— Splash ثم الانتقال لمباشر للرئيسية أو تسجيل الدخول ———
+  // ——— Splash قصير (0.4 ثانية) ثم اختفاء ———
   useEffect(() => {
     if (authState !== "splash") return;
     const t = setTimeout(() => {
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 400,
+        duration: 300,
         useNativeDriver: true,
       }).start(() => setSplashDone(true));
-    }, 3500);
+    }, 400);
     return () => clearTimeout(t);
   }, [authState, fadeAnim]);
 
-  // ——— بعد انتهاء السبلاش: الانتقال للرئيسية إن وُجد توكن صالح، وإلا شاشة تسجيل الدخول ———
+  // ——— عند عدم وجود جلسة محلية: الانتقال لشاشة البريد ———
   useEffect(() => {
     if (!splashDone || authResult === null) return;
-    if (authResult.authenticated && authResult.user) {
-      setUser(authResult.user as User);
-      setAuthState("main");
-    } else {
-      setAuthState("email");
+    if (authState === "splash") {
+      if (authResult.authenticated && authResult.user) {
+        setUser(authResult.user as User);
+        setAuthState("main");
+      } else {
+        setAuthState("email");
+      }
     }
-  }, [splashDone, authResult]);
+  }, [splashDone, authResult, authState]);
+
 
   // ——— عند ظهور شاشة البريد أو التسجيل: تحقق إضافي ———
   useEffect(() => {
@@ -826,6 +858,7 @@ export default function Page() {
     });
 
     if (AppState.currentState === "active") {
+      verifySession();
       heartbeatInterval = setInterval(notifyFriendsOnline, 2000);
     }
 
@@ -871,41 +904,42 @@ export default function Page() {
     setError("");
     setSuccessMsg("");
     setLoading(true);
-    try {
-      const checkRes = await axios.post(
-        `${API_BASE_URL}/api/auth/check-email`,
-        { email: trimmed },
-        { timeout: 8000 }
-      );
-      if (!checkRes.data?.exists) {
-        setError("البريد غير مسجّل. قم بالتسجيل أولاً");
+    const doRequest = async (retries = 3) => {
+      try {
+        const res = await axios.post(
+          `${API_BASE_URL}/api/auth/request-pin`,
+          { email: trimmed, mode: "login" },
+          { timeout: 25000 }
+        );
+        if (res.data?.success) {
+          setEmail(trimmed);
+          setSuccessMsg("تم إرسال الكود إلى بريدك");
+          setPinFromSignup(false);
+          setAuthState("pin");
+          setPin(["", "", "", "", "", ""]);
+          setTimeout(() => pinRefs.current[0]?.focus(), 300);
+        } else {
+          setError(res.data?.message || "فشل إرسال الكود");
+        }
+      } catch (err: unknown) {
+        const isNetwork =
+          (err as { code?: string })?.code === "ERR_NETWORK" ||
+          (err as { code?: string })?.code === "ECONNABORTED" ||
+          String((err as Error)?.message || "").toLowerCase().includes("network");
+        if (retries > 0 && isNetwork) {
+          await new Promise((r) => setTimeout(r, 500));
+          return doRequest(retries - 1);
+        }
+        const msg =
+          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          (err as Error)?.message ||
+          "تحقق من الاتصال وحاول مرة أخرى";
+        setError(msg);
+      } finally {
         setLoading(false);
-        return;
       }
-      const res = await axios.post(
-        `${API_BASE_URL}/api/auth/request-pin`,
-        { email: trimmed, mode: "login" },
-        { timeout: 12000 }
-      );
-      if (res.data?.success) {
-        setEmail(trimmed);
-        setSuccessMsg("تم إرسال الكود إلى بريدك");
-        setPinFromSignup(false);
-        setAuthState("pin");
-        setPin(["", "", "", "", "", ""]);
-        setTimeout(() => pinRefs.current[0]?.focus(), 300);
-      } else {
-        setError(res.data?.message || "فشل إرسال الكود");
-      }
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err as Error)?.message ||
-        "تحقق من الاتصال وحاول مرة أخرى";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    };
+    await doRequest();
   }, [email]);
 
   const requestPinSignup = useCallback(async () => {
@@ -922,41 +956,42 @@ export default function Page() {
     setError("");
     setSuccessMsg("");
     setLoading(true);
-    try {
-      const checkRes = await axios.post(
-        `${API_BASE_URL}/api/auth/check-email`,
-        { email: trimmed },
-        { timeout: 8000 }
-      );
-      if (checkRes.data?.exists) {
-        setError("البريد مسجّل مسبقاً. سجّل دخولك");
+    const doRequest = async (retries = 3) => {
+      try {
+        const res = await axios.post(
+          `${API_BASE_URL}/api/auth/request-pin`,
+          { email: trimmed, mode: "signup" },
+          { timeout: 25000 }
+        );
+        if (res.data?.success) {
+          setEmail(trimmed);
+          setSuccessMsg("تم إرسال كود التفعيل إلى بريدك");
+          setPinFromSignup(true);
+          setAuthState("pin");
+          setPin(["", "", "", "", "", ""]);
+          setTimeout(() => pinRefs.current[0]?.focus(), 300);
+        } else {
+          setError(res.data?.message || "فشل إرسال الكود");
+        }
+      } catch (err: unknown) {
+        const isNetwork =
+          (err as { code?: string })?.code === "ERR_NETWORK" ||
+          (err as { code?: string })?.code === "ECONNABORTED" ||
+          String((err as Error)?.message || "").toLowerCase().includes("network");
+        if (retries > 0 && isNetwork) {
+          await new Promise((r) => setTimeout(r, 500));
+          return doRequest(retries - 1);
+        }
+        const msg =
+          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          (err as Error)?.message ||
+          "تحقق من الاتصال وحاول مرة أخرى";
+        setError(msg);
+      } finally {
         setLoading(false);
-        return;
       }
-      const res = await axios.post(
-        `${API_BASE_URL}/api/auth/request-pin`,
-        { email: trimmed },
-        { timeout: 12000 }
-      );
-      if (res.data?.success) {
-        setEmail(trimmed);
-        setSuccessMsg("تم إرسال كود التفعيل إلى بريدك");
-        setPinFromSignup(true);
-        setAuthState("pin");
-        setPin(["", "", "", "", "", ""]);
-        setTimeout(() => pinRefs.current[0]?.focus(), 300);
-      } else {
-        setError(res.data?.message || "فشل إرسال الكود");
-      }
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err as Error)?.message ||
-        "تحقق من الاتصال وحاول مرة أخرى";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    };
+    await doRequest();
   }, [email]);
 
   const verifyPin = useCallback(async () => {
@@ -967,29 +1002,40 @@ export default function Page() {
     }
     setError("");
     setLoading(true);
-    try {
-      const res = await axios.post(
-        `${API_BASE_URL}/api/auth/verify-pin`,
-        { email: email.trim().toLowerCase(), pin: pinStr },
-        { timeout: 12000 }
-      );
-      if (res.data?.success && res.data.token && res.data.user) {
-        await AsyncStorage.setItem("token", res.data.token);
-        await AsyncStorage.setItem("user", JSON.stringify(res.data.user));
-        setUser(res.data.user);
-        setAuthState("main");
-      } else {
-        setError(res.data?.message || "فشل التحقق");
+    const doVerify = async (retries = 2) => {
+      try {
+        const res = await axios.post(
+          `${API_BASE_URL}/api/auth/verify-pin`,
+          { email: email.trim().toLowerCase(), pin: pinStr },
+          { timeout: 20000 }
+        );
+        if (res.data?.success && res.data.token && res.data.user) {
+          await AsyncStorage.setItem("token", res.data.token);
+          await AsyncStorage.setItem("user", JSON.stringify(res.data.user));
+          setUser(res.data.user);
+          setAuthState("main");
+        } else {
+          setError(res.data?.message || "فشل التحقق");
+        }
+      } catch (err: unknown) {
+        const isNetwork =
+          (err as { code?: string })?.code === "ERR_NETWORK" ||
+          (err as { code?: string })?.code === "ECONNABORTED" ||
+          String((err as Error)?.message || "").toLowerCase().includes("network");
+        if (retries > 0 && isNetwork) {
+          await new Promise((r) => setTimeout(r, 500));
+          return doVerify(retries - 1);
+        }
+        const msg =
+          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          (err as Error)?.message ||
+          "تحقق من الاتصال وحاول مرة أخرى";
+        setError(msg);
+      } finally {
+        setLoading(false);
       }
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err as Error)?.message ||
-        "تحقق من الكود والاتصال";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    };
+    await doVerify();
   }, [email, pin]);
 
   const handlePinChange = (index: number, value: string) => {
@@ -1020,26 +1066,38 @@ export default function Page() {
   const resendPin = useCallback(async () => {
     setError("");
     setLoading(true);
-    try {
-      const body: { email: string; mode?: string } = { email: email.trim().toLowerCase() };
-      if (!pinFromSignup) body.mode = "login";
-      const res = await axios.post(
-        `${API_BASE_URL}/api/auth/request-pin`,
-        body,
-        { timeout: 12000 }
-      );
-      if (res.data?.success) {
-        setSuccessMsg("تم إعادة إرسال الكود");
-        setPin(["", "", "", "", "", ""]);
-        pinRefs.current[0]?.focus();
-      } else {
-        setError(res.data?.message || "فشل إعادة الإرسال");
+    const body: { email: string; mode?: string } = { email: email.trim().toLowerCase() };
+    if (!pinFromSignup) body.mode = "login";
+    if (pinFromSignup) body.mode = "signup";
+    const doResend = async (retries = 3) => {
+      try {
+        const res = await axios.post(
+          `${API_BASE_URL}/api/auth/request-pin`,
+          body,
+          { timeout: 25000 }
+        );
+        if (res.data?.success) {
+          setSuccessMsg("تم إعادة إرسال الكود");
+          setPin(["", "", "", "", "", ""]);
+          pinRefs.current[0]?.focus();
+        } else {
+          setError(res.data?.message || "فشل إعادة الإرسال");
+        }
+      } catch (err: unknown) {
+        const isNetwork =
+          (err as { code?: string })?.code === "ERR_NETWORK" ||
+          (err as { code?: string })?.code === "ECONNABORTED" ||
+          String((err as Error)?.message || "").toLowerCase().includes("network");
+        if (retries > 0 && isNetwork) {
+          await new Promise((r) => setTimeout(r, 500));
+          return doResend(retries - 1);
+        }
+        setError("تحقق من الاتصال وحاول مرة أخرى");
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      setError("تحقق من الاتصال وحاول مرة أخرى");
-    } finally {
-      setLoading(false);
-    }
+    };
+    await doResend();
   }, [email, pinFromSignup]);
 
   // ——— انتظار تحميل الخطوط (Ionicons) قبل عرض أي واجهة ———

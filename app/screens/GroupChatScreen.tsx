@@ -19,6 +19,7 @@ import {
   joinGroupChat,
   leaveGroupChat,
   fetchGroupChatMessages,
+  getCachedGroupChatMessages,
   sendGroupChatMessage,
   setGroupChatMessagesCache,
   getGroupChatMessagesCache,
@@ -35,6 +36,7 @@ function getImageUrl(url: string | null | undefined): string {
 
 const BG_DARK = "#1a1625";
 const TEXT_LIGHT = "#f5f3ff";
+const BUBBLE_WIDTH = Math.min(280, Dimensions.get("window").width * 0.82);
 
 type UserInfo = { id?: string; name?: string; profileImage?: string };
 type SlotInfo = { userId: string; name?: string; profileImage?: string | null };
@@ -67,8 +69,11 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
 
   const loadMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    const cached = getGroupChatMessagesCache();
-    if (cached.length > 0) setMessages(cached);
+    const memCached = getGroupChatMessagesCache();
+    if (memCached.length > 0) setMessages(memCached);
+    getCachedGroupChatMessages().then((stored) => {
+      if (stored.length > 0) setMessages(stored);
+    });
     const msgs = await fetchGroupChatMessages();
     setMessages(msgs);
     setGroupChatMessagesCache(msgs);
@@ -83,7 +88,9 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
   }, []);
 
   useEffect(() => {
-    setMessages(getGroupChatMessagesCache());
+    getCachedGroupChatMessages().then((stored) => {
+      if (stored.length > 0) setMessages(stored);
+    });
     loadMessages(true);
   }, [loadMessages]);
 
@@ -264,21 +271,39 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
             data={messages}
             renderItem={({ item }) => {
               const isMe = item.fromId === currentUserId;
+              const diamonds = item.fromDiamonds ?? 0;
+              const chargedGold = item.fromChargedGold ?? 0;
               return (
                 <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
-                  {!isMe && item.fromProfileImage ? (
-                    <Image source={{ uri: getImageUrl(item.fromProfileImage) }} style={styles.msgAvatar} />
-                  ) : !isMe ? (
-                    <View style={[styles.msgAvatar, styles.placeholderAvatar]}>
-                      <Ionicons name="person" size={14} color={TEXT_MUTED} />
+                  <View style={styles.msgSenderCol}>
+                    <View style={styles.msgImageNameRow}>
+                      {item.fromProfileImage ? (
+                        <Image source={{ uri: getImageUrl(item.fromProfileImage) }} style={styles.msgAvatarSquare} />
+                      ) : (
+                        <View style={[styles.msgAvatarSquare, styles.placeholderAvatar]}>
+                          <Ionicons name="person" size={12} color={TEXT_MUTED} />
+                        </View>
+                      )}
+                      <Text style={styles.msgSenderName} numberOfLines={1}>
+                        {item.fromName}
+                      </Text>
                     </View>
-                  ) : null}
-                  <View style={[styles.msgBubble, isMe && styles.msgBubbleMe]}>
-                    {!isMe && <Text style={styles.msgName}>{item.fromName}</Text>}
-                    <Text style={styles.msgText}>{item.text}</Text>
-                    <Text style={styles.msgTime}>
-                      {item.createdAt ? new Date(item.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : ""}
-                    </Text>
+                    <View style={styles.msgGemsRow}>
+                      <View style={styles.msgGemItem}>
+                        <Ionicons name="diamond" size={10} color="#60a5fa" />
+                        <Text style={styles.msgGemCount}>{Number(diamonds).toFixed(1)}</Text>
+                      </View>
+                      <View style={styles.msgGemItem}>
+                        <Ionicons name="diamond" size={10} color="#f472b6" />
+                        <Text style={styles.msgGemCount}>{Number(chargedGold).toFixed(0)}</Text>
+                      </View>
+                    </View>
+                    <View style={[styles.msgBubble, isMe && styles.msgBubbleMe]}>
+                      <Text style={styles.msgText}>{item.text}</Text>
+                      <Text style={styles.msgTime}>
+                        {item.createdAt ? new Date(item.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : ""}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               );
@@ -449,22 +474,68 @@ const styles = StyleSheet.create({
   listContent: { padding: 10, paddingBottom: 24 },
   emptyWrap: { alignItems: "center", paddingVertical: 40, gap: 8 },
   emptyText: { fontSize: 14, color: TEXT_MUTED },
-  msgRow: { flexDirection: "row", marginBottom: 12, alignItems: "flex-start" },
-  msgRowMe: { flexDirection: "row-reverse" },
-  msgAvatar: { width: 28, height: 28, borderRadius: 14, marginHorizontal: 6 },
-  placeholderAvatar: { backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
-  msgBubble: {
-    maxWidth: "75%",
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "rgba(167, 139, 250, 0.15)",
+  msgRow: { flexDirection: "column", marginBottom: 14, alignItems: "flex-start" },
+  msgRowMe: { alignItems: "flex-end" },
+  msgSenderCol: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 8,
+    width: BUBBLE_WIDTH,
   },
-  msgBubbleMe: { backgroundColor: "rgba(167, 139, 250, 0.25)" },
+  msgImageNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  msgAvatarSquare: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "rgba(167, 139, 250, 0.15)",
+  },
+  placeholderAvatar: { alignItems: "center", justifyContent: "center" },
+  msgSenderName: {
+    fontSize: 11,
+    color: TEXT_LIGHT,
+    maxWidth: 80,
+  },
+  msgGemsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  msgGemItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  msgGemCount: {
+    fontSize: 9,
+    color: TEXT_MUTED,
+  },
+  msgBubble: {
+    width: "100%",
+    alignSelf: "stretch",
+    backgroundColor: "rgba(30, 27, 45, 0.95)",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "rgba(167, 139, 250, 0.2)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  msgBubbleMe: {
+    backgroundColor: "rgba(139, 92, 246, 0.2)",
+    borderColor: "rgba(167, 139, 250, 0.35)",
+  },
   msgName: { fontSize: 11, color: ACCENT, marginBottom: 2 },
-  msgText: { fontSize: 14, color: TEXT_LIGHT },
-  msgTime: { fontSize: 10, color: TEXT_MUTED, marginTop: 4 },
+  msgText: { fontSize: 15, color: TEXT_LIGHT, lineHeight: 22 },
+  msgTime: { fontSize: 11, color: TEXT_MUTED, marginTop: 6 },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",

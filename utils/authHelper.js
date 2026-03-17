@@ -97,6 +97,34 @@ async function verifyTokenWithServer(token, retries = 2) {
 }
 
 /**
+ * تحقق سريع من المصادقة — من AsyncStorage فقط (بدون استدعاء API)
+ * يُستخدم لعرض التطبيق فوراً عند الفتح أو العودة
+ */
+export async function checkAuthStatusQuick() {
+  try {
+    const [token, userStr] = await Promise.all([
+      AsyncStorage.getItem("token"),
+      AsyncStorage.getItem("user"),
+    ]);
+    if (!token || !userStr) return { authenticated: false, reason: "no_data" };
+    let user;
+    try {
+      user = JSON.parse(userStr);
+    } catch {
+      return { authenticated: false, reason: "invalid_data" };
+    }
+    if (!validateStoredData(user)) return { authenticated: false, reason: "invalid_user" };
+    if (isTokenExpired(token)) {
+      await AsyncStorage.multiRemove(["token", "user", "userId", "authEmail"]);
+      return { authenticated: false, reason: "expired_token" };
+    }
+    return { authenticated: true, user, offline: true };
+  } catch {
+    return { authenticated: false, reason: "error" };
+  }
+}
+
+/**
  * التحقق الكامل من تسجيل الدخول مع fallback mechanism
  */
 export async function checkAuthStatus() {

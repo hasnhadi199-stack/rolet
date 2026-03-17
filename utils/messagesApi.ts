@@ -70,7 +70,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
       status === 503 ||
       status === 504;
     if (retries > 0 && isRetryable) {
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 600));
       return withRetry(fn, retries - 1);
     }
     throw err;
@@ -265,6 +265,11 @@ export async function fetchInbox(): Promise<InboxItem[]> {
     console.log("fetchInbox error:", err);
   }
   return await getCachedJson<InboxItem[]>(CACHE_KEYS.inbox, []);
+}
+
+/** جلب صندوق الوارد المخزّن محلياً — للعرض الفوري */
+export async function getCachedInbox(): Promise<InboxItem[]> {
+  return getCachedJson<InboxItem[]>(CACHE_KEYS.inbox, []);
 }
 
 /** قائمة معرفات المستخدمين المتصلين الآن — يُرجع من الخادم عند دعمه */
@@ -520,8 +525,10 @@ export type GroupChatMessage = {
   imageUrl?: string | null;
 };
 
-/** تخزين مؤقت للرسائل — يبقى عند الخروج والعودة */
+/** تخزين مؤقت في الذاكرة — للعرض الفوري أثناء الجلسة */
 let groupChatMessagesCache: GroupChatMessage[] = [];
+
+const GROUP_CHAT_CACHE_KEY = "cache_group_chat_messages_v1";
 
 export function getGroupChatMessagesCache(): GroupChatMessage[] {
   return groupChatMessagesCache;
@@ -529,14 +536,23 @@ export function getGroupChatMessagesCache(): GroupChatMessage[] {
 
 export function setGroupChatMessagesCache(msgs: GroupChatMessage[]): void {
   groupChatMessagesCache = msgs;
+  void setCachedJson(GROUP_CHAT_CACHE_KEY, msgs);
+}
+
+/** جلب رسائل الدردشة المخزّنة محلياً — تبقى بعد إغلاق التطبيق أو إعادة التشغيل */
+export async function getCachedGroupChatMessages(): Promise<GroupChatMessage[]> {
+  const cached = await getCachedJson<GroupChatMessage[]>(GROUP_CHAT_CACHE_KEY, []);
+  if (cached.length > 0) setGroupChatMessagesCache(cached);
+  return cached;
 }
 
 /** جلب رسائل الدردشة الجماعية */
 export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
   try {
     const headers = await getAuthHeaders();
-    const res = await withRetry(() =>
-      axios.get(`${API_BASE_URL}/api/group-chat/messages?limit=250`, { headers, timeout: API_TIMEOUT })
+    const res = await withRetry(
+      () => axios.get(`${API_BASE_URL}/api/group-chat/messages?limit=250`, { headers, timeout: 12000 }),
+      4
     );
     if (res.data?.success && Array.isArray(res.data.messages)) {
       const msgs = (res.data.messages as GroupChatMessage[]).map((m) => ({
@@ -547,9 +563,10 @@ export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
       return msgs;
     }
   } catch (err) {
-    console.log("fetchGroupChatMessages error:", err);
+    if (__DEV__) console.log("fetchGroupChatMessages error:", err);
   }
-  return [];
+  const fallback = await getCachedGroupChatMessages();
+  return fallback;
 }
 
 /** إرسال رسالة في الدردشة الجماعية */
