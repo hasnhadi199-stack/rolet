@@ -1590,7 +1590,11 @@ export default function Page() {
                   user={profileFromGroupChatUser}
                   currentUser={{ id: user.id, name: user.name, profileImage: user.profileImage, age: user.age, country: user.country, gender: user.gender }}
                   onBack={() => setProfileFromGroupChatUser(null)}
-                  onOpenChat={() => setProfileFromGroupChatUser(null)}
+                  onOpenChat={() => {
+                    setSelectedChatUser(profileFromGroupChatUser);
+                    setProfileFromGroupChatUser(null);
+                    setTabToReturnTo("messages");
+                  }}
                   onWalletUpdate={refreshUser}
                   onOpenTopup={() => {
                     setProfileFromGroupChatUser(null);

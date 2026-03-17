@@ -11,6 +11,7 @@ import {
   FlatList,
   TextInput,
   KeyboardAvoidingView,
+  Keyboard,
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
@@ -26,6 +27,56 @@ import {
   type GroupChatMessage,
 } from "../../utils/messagesApi";
 import { API_BASE_URL } from "../../utils/authHelper";
+
+const MENTION_COLOR = "#38bdf8";
+
+function renderMessageWithMentions(
+  text: string,
+  baseStyle: object,
+  onOpenProfile?: (slot: { userId: string; name?: string; profileImage?: string | null }) => void
+) {
+  const mentionRegex = /@\[([^\]]+)\]([^\s]*)|(@[^\s]+)/g;
+  const parts: { type: "text" | "mention"; text: string; userId?: string; name?: string }[] = [];
+  let match;
+  let lastIndex = 0;
+  while ((match = mentionRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: "text", text: text.slice(lastIndex, match.index) });
+    }
+    if (match[1]) {
+      parts.push({ type: "mention", text: `@${match[2]}`, userId: match[1], name: match[2] });
+    } else {
+      parts.push({ type: "mention", text: match[3] });
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push({ type: "text", text: text.slice(lastIndex) });
+  }
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", flex: 1 }}>
+      {parts.map((part, i) => {
+        if (part.type === "text") {
+          return <Text key={i} style={baseStyle}>{part.text}</Text>;
+        }
+        const mentionStyle = [baseStyle, { color: MENTION_COLOR }];
+        if (part.userId && onOpenProfile) {
+          return (
+            <TouchableOpacity
+              key={i}
+              onPress={() => onOpenProfile({ userId: part.userId!, name: part.name, profileImage: null })}
+              activeOpacity={0.6}
+              style={{ alignSelf: "baseline" }}
+            >
+              <Text style={mentionStyle}>{part.text}</Text>
+            </TouchableOpacity>
+          );
+        }
+        return <Text key={i} style={mentionStyle}>{part.text}</Text>;
+      })}
+    </View>
+  );
+}
 
 function getImageUrl(url: string | null | undefined): string {
   if (!url) return "";
@@ -57,15 +108,28 @@ const CARD_BG = "rgba(45, 38, 64, 0.6)";
 const TEXT_MUTED = "#a1a1aa";
 const ACCENT = "#a78bfa";
 
-export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
+export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfile }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [mySlotIndex, setMySlotIndex] = useState<number | null>(null);
   const [messages, setMessages] = useState<GroupChatMessage[]>(() => getGroupChatMessagesCache());
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [inputText, setInputText] = useState("");
+  const [mentionPrefix, setMentionPrefix] = useState<string | null>(null);
+  const [mentionData, setMentionData] = useState<{ userId: string; name: string; profileImage?: string | null } | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const flatRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
   const currentUserId = user?.id || "";
+
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const loadMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -105,17 +169,27 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
     setRefreshing(false);
   }, [loadMessages]);
 
+  const handleMention = useCallback((fromId: string, fromName: string, fromProfileImage?: string | null) => {
+    setMentionPrefix(`@${fromName} `);
+    setMentionData({ userId: fromId, name: fromName, profileImage: fromProfileImage });
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, []);
+
   const handleSend = useCallback(async () => {
-    const text = inputText.trim();
-    if (!text) return;
+    const prefix = mentionData ? `@[${mentionData.userId}]${mentionData.name} ` : (mentionPrefix || "");
+    const fullText = (prefix + inputText).trim();
+    if (!fullText) return;
     setInputText("");
+    setMentionPrefix(null);
+    setMentionData(null);
+    Keyboard.dismiss();
     const tempId = `temp_${Date.now()}`;
     const optimistic: GroupChatMessage = {
       id: tempId,
       fromId: currentUserId,
       fromName: user?.name || "مستخدم",
       fromProfileImage: user?.profileImage ?? null,
-      text,
+      text: fullText,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => {
@@ -124,7 +198,7 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
       return next;
     });
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 50);
-    const msg = await sendGroupChatMessage(text);
+    const msg = await sendGroupChatMessage(fullText);
     if (msg) {
       setMessages((prev) => {
         const next = prev.map((m) => (m.id === tempId ? { ...msg, id: String(msg.id) } : m));
@@ -138,12 +212,16 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
         return filtered;
       });
     }
-  }, [inputText, currentUserId, user?.name, user?.profileImage]);
+  }, [inputText, mentionPrefix, mentionData, currentUserId, user?.name, user?.profileImage]);
 
   const avatarSize = expanded ? (SCREEN_WIDTH - 32 - AVATAR_GAP * (AVATAR_COLS + 1)) / AVATAR_COLS : 32;
 
   return (
-    <View style={[styles.container, { backgroundColor: BG_DARK }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: BG_DARK }]}
+      behavior={Platform.OS === "ios" ? "padding" : "padding"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+    >
       <View style={styles.header}>
         <View style={styles.headerIcons}>
           <TouchableOpacity style={styles.headerIconBtn} activeOpacity={0.8}>
@@ -268,6 +346,7 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
         ) : (
           <FlatList
             ref={flatRef}
+            keyboardShouldPersistTaps="handled"
             data={messages}
             renderItem={({ item }) => {
               const isMe = item.fromId === currentUserId;
@@ -277,13 +356,19 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
                 <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
                   <View style={[styles.msgSenderCol, isMe && styles.msgSenderColMe]}>
                     <View style={styles.msgImageNameRow}>
-                      {item.fromProfileImage ? (
-                        <Image source={{ uri: getImageUrl(item.fromProfileImage) }} style={styles.msgAvatarSquare} />
-                      ) : (
-                        <View style={[styles.msgAvatarSquare, styles.placeholderAvatar]}>
-                          <Ionicons name="person" size={12} color={TEXT_MUTED} />
-                        </View>
-                      )}
+                      <TouchableOpacity
+                        activeOpacity={1}
+                        onLongPress={() => handleMention(item.fromId, item.fromName, item.fromProfileImage)}
+                        delayLongPress={400}
+                      >
+                        {item.fromProfileImage ? (
+                          <Image source={{ uri: getImageUrl(item.fromProfileImage) }} style={styles.msgAvatarSquare} />
+                        ) : (
+                          <View style={[styles.msgAvatarSquare, styles.placeholderAvatar]}>
+                            <Ionicons name="person" size={12} color={TEXT_MUTED} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
                       <View style={styles.msgNameGemsCol}>
                         <Text style={styles.msgSenderName} numberOfLines={1}>
                           {item.fromName}
@@ -301,7 +386,7 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
                       </View>
                     </View>
                     <View style={[styles.msgBubble, isMe && styles.msgBubbleMe]}>
-                      <Text style={[styles.msgText, isMe ? styles.msgTextMe : styles.msgTextOther]}>{item.text}</Text>
+                      {renderMessageWithMentions(item.text, [styles.msgText, isMe ? styles.msgTextMe : styles.msgTextOther], onOpenProfile)}
                       <Text style={[styles.msgTime, isMe ? styles.msgTimeMe : styles.msgTimeOther]}>
                         {item.createdAt ? new Date(item.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : ""}
                       </Text>
@@ -323,26 +408,29 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers }: Props) {
         )}
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
-        <View style={styles.inputRow}>
+      <View style={[styles.inputRow, keyboardVisible && styles.inputRowKeyboardUp]}>
+        <View style={styles.inputWrap}>
+          {mentionPrefix ? (
+            <TouchableOpacity onPress={() => { setMentionPrefix(null); setMentionData(null); }} activeOpacity={0.7}>
+              <Text style={styles.mentionText}>{mentionPrefix}</Text>
+            </TouchableOpacity>
+          ) : null}
           <TextInput
-            style={styles.input}
-            placeholder="اكتب رسالة..."
+            ref={inputRef}
+            style={[styles.input, mentionPrefix ? styles.inputWithMention : null]}
+            placeholder={mentionPrefix ? "" : "اكتب رسالة..."}
             placeholderTextColor={TEXT_MUTED}
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleSend}
             returnKeyType="send"
           />
+        </View>
           <TouchableOpacity style={styles.sendBtn} onPress={handleSend} activeOpacity={0.8}>
             <Ionicons name="send" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -554,22 +642,41 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 10,
     paddingVertical: 6,
-    paddingBottom: Platform.OS === "ios" ? 26 : 74,
+    paddingBottom: Platform.OS === "ios" ? 36 : 38,
     gap: 6,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.06)",
     backgroundColor: BG_DARK,
   },
-  input: {
+  inputRowKeyboardUp: {
+    paddingBottom: 6,
+  },
+  inputWrap: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: CARD_BG,
     borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: TEXT_LIGHT,
     borderWidth: 1,
     borderColor: "rgba(167, 139, 250, 0.2)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  mentionText: {
+    fontSize: 14,
+    color: MENTION_COLOR,
+    marginRight: 4,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: "transparent",
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    fontSize: 14,
+    color: TEXT_LIGHT,
+  },
+  inputWithMention: {
+    minWidth: 60,
   },
   sendBtn: {
     width: 38,
