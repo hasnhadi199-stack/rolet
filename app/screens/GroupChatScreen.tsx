@@ -481,38 +481,38 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
         </Pressable>
       </Modal>
 
+      {replyTo ? (
+        <View style={styles.replyPreviewRow}>
+          <TouchableOpacity
+            style={styles.replyPreview}
+            onPress={() => setReplyTo(null)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.replyPreviewContent}>
+              <Text style={styles.replyPreviewLabel}>رد على {replyTo.replyToFromName}</Text>
+              <Text style={styles.replyPreviewText} numberOfLines={2}>{replyTo.replyToText}</Text>
+            </View>
+            <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <View style={[styles.inputRow, keyboardVisible && styles.inputRowKeyboardUp]}>
         <View style={styles.inputWrap}>
-          {replyTo ? (
-            <TouchableOpacity
-              style={styles.replyPreview}
-              onPress={() => setReplyTo(null)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.replyPreviewContent}>
-                <Text style={styles.replyPreviewLabel}>رد على {replyTo.replyToFromName}</Text>
-                <Text style={styles.replyPreviewText} numberOfLines={2}>{replyTo.replyToText}</Text>
-              </View>
-              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.6)" />
-            </TouchableOpacity>
-          ) : null}
-          <View style={styles.inputInnerRow}>
-            {mentionPrefix ? (
+          {mentionPrefix ? (
               <TouchableOpacity onPress={() => { setMentionPrefix(null); setMentionData(null); }} activeOpacity={0.7}>
                 <Text style={styles.mentionText}>{mentionPrefix}</Text>
               </TouchableOpacity>
             ) : null}
             <TextInput
-            ref={inputRef}
-            style={[styles.input, mentionPrefix ? styles.inputWithMention : null]}
-            placeholder={mentionPrefix ? "" : "اكتب رسالة..."}
-            placeholderTextColor={TEXT_MUTED}
-            value={inputText}
-            onChangeText={setInputText}
-            onSubmitEditing={handleSend}
-            returnKeyType="send"
-          />
-          </View>
+              ref={inputRef}
+              style={[styles.input, mentionPrefix ? styles.inputWithMention : null]}
+              placeholder={mentionPrefix ? "" : "اكتب رسالة..."}
+              placeholderTextColor={TEXT_MUTED}
+              value={inputText}
+              onChangeText={setInputText}
+              onSubmitEditing={handleSend}
+              returnKeyType="send"
+            />
         </View>
           <TouchableOpacity style={styles.sendBtn} onPress={handleSend} activeOpacity={0.8}>
             <Ionicons name="send" size={18} color="#fff" />
@@ -781,29 +781,30 @@ const styles = StyleSheet.create({
   },
   bubbleMenuBtnText: { fontSize: 14, color: TEXT_LIGHT, fontWeight: "600" },
   bubbleMenuDivider: { width: 1, height: 20, backgroundColor: "rgba(255,255,255,0.3)" },
+  replyPreviewRow: {
+    paddingHorizontal: 10,
+    paddingBottom: 6,
+    paddingTop: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+    backgroundColor: BG_DARK,
+  },
   replyPreview: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "stretch",
     backgroundColor: "rgba(255,255,255,0.15)",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginBottom: 8,
   },
   replyPreviewContent: { flex: 1 },
   replyPreviewLabel: { fontSize: 11, color: "rgba(255,255,255,0.8)", marginBottom: 2 },
   replyPreviewText: { fontSize: 12, color: TEXT_LIGHT },
-  inputInnerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: 4,
-  },
   inputWrap: {
     flex: 1,
-    flexDirection: "column",
-    alignItems: "stretch",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     backgroundColor: CARD_BG,
     borderRadius: 18,
     borderWidth: 1,
