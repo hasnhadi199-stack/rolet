@@ -37,6 +37,7 @@ import {
 import { getFlagEmoji, getCountryName } from "../../utils/countries";
 import { fetchFollowing } from "../../utils/socialApi";
 import { fetchOnlineUserIds } from "../../utils/messagesApi";
+import { API_BASE_URL } from "../../utils/authHelper";
 import { useAppAlert } from "../../components/AppAlertProvider";
 import { useTheme } from "../_contexts/ThemeContext";
 import { useLanguage } from "../_contexts/LanguageContext";
@@ -703,7 +704,7 @@ export default function MomentScreen({ user, onWalletUpdate }: Props) {
                     <Ionicons name="alert-circle-outline" size={48} color="#f87171" />
                     <Text style={styles.videoErrorText}>{videoError}</Text>
                     <Text style={styles.videoHintText}>{t("momentScreen.openLinkHint")}</Text>
-                    <Text style={styles.videoUrlText} selectable>https://myapi123.loca.lt</Text>
+                    <Text style={styles.videoUrlText} selectable>{API_BASE_URL}</Text>
                     <TouchableOpacity style={styles.retryBtn} onPress={() => videoModal && openVideo(videoModal)}>
                       <Text style={styles.retryText}>{t("momentScreen.retry")}</Text>
                     </TouchableOpacity>

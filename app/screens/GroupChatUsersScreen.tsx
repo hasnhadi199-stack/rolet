@@ -31,9 +31,10 @@ function getImageUrl(url: string | null | undefined): string {
 
 type Props = {
   onBack: () => void;
+  currentUserId?: string | null;
 };
 
-export default function GroupChatUsersScreen({ onBack }: Props) {
+export default function GroupChatUsersScreen({ onBack, currentUserId }: Props) {
   const [users, setUsers] = useState<GroupChatUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,7 +65,7 @@ export default function GroupChatUsersScreen({ onBack }: Props) {
         <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.8}>
           <Ionicons name="chevron-back" size={22} color={TEXT_LIGHT} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>المشاركون</Text>
+        <Text style={styles.headerTitle}>من في الدردشة</Text>
       </View>
 
       {loading ? (
@@ -80,14 +81,14 @@ export default function GroupChatUsersScreen({ onBack }: Props) {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#a78bfa" size="small" />
           }
         >
-          {users.length === 0 ? (
+          {users.filter((u) => u.userId !== currentUserId).length === 0 ? (
             <View style={styles.emptyWrap}>
               <Ionicons name="people-outline" size={32} color={TEXT_MUTED} />
               <Text style={styles.emptyText}>لا يوجد مشاركون حالياً</Text>
             </View>
           ) : (
             <View style={styles.userGrid}>
-              {users.map((u) => (
+              {users.filter((u) => u.userId !== currentUserId).map((u) => (
                 <View key={u.userId} style={styles.userCard}>
                   {u.profileImage ? (
                     <Image source={{ uri: getImageUrl(u.profileImage) }} style={styles.avatar} />

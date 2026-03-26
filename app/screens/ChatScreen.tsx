@@ -1149,7 +1149,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
             <View style={styles.giftCardBottomRow}>
               <TouchableOpacity
                 style={styles.giftPlayBtn}
-                activeOpacity={0.8}
+                activeOpacity={0.5}
                 onPress={() => {
                   setGiftOverlayType(
                     m.giftType === "dragon"
@@ -1190,7 +1190,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
           <TouchableOpacity
             style={styles.voicePlayBtn}
             onPress={() => handlePlayVoice(m)}
-            activeOpacity={0.8}
+            activeOpacity={0.5}
             disabled={loading}
           >
             {loading ? (
@@ -1214,11 +1214,11 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
       const uri = (m.imageUrl || m.localImageUri) as string;
       return (
         <>
-          <TouchableOpacity activeOpacity={0.9} onPress={() => setPreviewImage(uri)}>
+          <TouchableOpacity activeOpacity={0.5} onPress={() => setPreviewImage(uri)}>
             <Image source={{ uri }} style={styles.imageBubble} resizeMode="cover" />
           </TouchableOpacity>
           {isMine && status === "failed" && (
-            <TouchableOpacity activeOpacity={0.85} onPress={() => retrySend(m.id)} style={styles.failedRow}>
+            <TouchableOpacity activeOpacity={0.5} onPress={() => retrySend(m.id)} style={styles.failedRow}>
               <Ionicons name="alert-circle" size={14} color="#f87171" />
               <Text style={styles.failedText}>{t("chat.sendFailed")}</Text>
             </TouchableOpacity>
@@ -1230,7 +1230,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
       <>
         <Text style={isMine ? styles.myMsgText : styles.otherMsgText}>{m.text}</Text>
         {isMine && status === "failed" && (
-          <TouchableOpacity activeOpacity={0.85} onPress={() => retrySend(m.id)} style={styles.failedRow}>
+          <TouchableOpacity activeOpacity={0.5} onPress={() => retrySend(m.id)} style={styles.failedRow}>
             <Ionicons name="alert-circle" size={14} color="#f87171" />
             <Text style={styles.failedText}>{t("chat.sendFailed")}</Text>
           </TouchableOpacity>
@@ -1247,12 +1247,12 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
     >
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.8}>
+          <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.5}>
             <Ionicons name="arrow-back" size={22} color={TEXT_LIGHT} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <View style={styles.avatarsRow}>
-              <TouchableOpacity onPress={onOpenMyProfile} activeOpacity={0.8} disabled={!onOpenMyProfile}>
+              <TouchableOpacity onPress={onOpenMyProfile} activeOpacity={0.5} disabled={!onOpenMyProfile}>
                 {me?.profileImage ? (
                   <Image source={{ uri: me.profileImage }} style={styles.headerAvatarSmall} />
                 ) : (
@@ -1261,7 +1261,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                   </View>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity onPress={onOpenOtherProfile} activeOpacity={0.8} disabled={!onOpenOtherProfile}>
+              <TouchableOpacity onPress={onOpenOtherProfile} activeOpacity={0.5} disabled={!onOpenOtherProfile}>
                 {other.profileImage ? (
                   <Image source={{ uri: other.profileImage }} style={styles.headerAvatarSmall} />
                 ) : (
@@ -1277,7 +1277,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
           <View style={{ width: 32 }} />
         </View>
 
-        <ScrollView style={styles.messagesContainer} ref={scrollRef}>
+        <ScrollView style={styles.messagesContainer} ref={scrollRef} keyboardShouldPersistTaps="handled" scrollEventThrottle={16}>
           {dedupeById(messages).map((m) => {
             const isMine = m.fromId === me?.id;
             const status: LocalStatus = m.status || "sent";
@@ -1299,7 +1299,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
             return (
               <View key={m.id} style={isMine ? styles.myMsgRow : styles.otherMsgRow}>
                 {!isMine && (
-                  <TouchableOpacity onPress={onOpenOtherProfile} activeOpacity={0.8} disabled={!onOpenOtherProfile}>
+                  <TouchableOpacity onPress={onOpenOtherProfile} activeOpacity={0.5} disabled={!onOpenOtherProfile}>
                     {other.profileImage ? (
                       <Image source={{ uri: other.profileImage }} style={styles.msgAvatarOther} />
                     ) : (
@@ -1311,9 +1311,9 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                 )}
                     <View style={isMine ? styles.myMsgSideMine : styles.myMsgSideOther}>
                   <TouchableOpacity
-                    activeOpacity={0.9}
+                    activeOpacity={0.5}
                     onLongPress={() => setActiveMenuId(m.id)}
-                    delayLongPress={220}
+                    delayLongPress={200}
                   >
                     {isDice || isRps || isGift ? (
                       <View style={styles.specialStandalone}>
@@ -1344,14 +1344,14 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                   {activeMenuId === m.id && (
                     <View style={styles.messageMenu}>
                       <TouchableOpacity
-                        activeOpacity={0.8}
+                        activeOpacity={0.5}
                         style={styles.menuBtn}
                         onPress={() => { setReplyTo(m); setActiveMenuId(null); }}
                       >
                         <Text style={styles.menuBtnText}>رد</Text>
                       </TouchableOpacity>
                       {isMine && (
-                        <TouchableOpacity activeOpacity={0.8} style={styles.menuBtn} onPress={() => handleDelete(m.id)}>
+                        <TouchableOpacity activeOpacity={0.5} style={styles.menuBtn} onPress={() => handleDelete(m.id)}>
                           <Text style={styles.menuBtnText}>سحب</Text>
                         </TouchableOpacity>
                       )}
@@ -1359,7 +1359,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                   )}
                 </View>
                 {isMine && (
-                  <TouchableOpacity onPress={onOpenMyProfile} activeOpacity={0.8} disabled={!onOpenMyProfile}>
+                  <TouchableOpacity onPress={onOpenMyProfile} activeOpacity={0.5} disabled={!onOpenMyProfile}>
                     {me?.profileImage ? (
                       <Image source={{ uri: me.profileImage }} style={styles.msgAvatarMine} />
                     ) : (
@@ -1409,7 +1409,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
               onSubmitEditing={handleSend}
               onFocus={() => setShowEmojiPicker(false)}
             />
-            <TouchableOpacity onPress={handleSend} disabled={!text.trim()} activeOpacity={0.8}>
+            <TouchableOpacity onPress={handleSend} disabled={!text.trim()} activeOpacity={0.5}>
               <Ionicons name="send" size={22} color={text.trim() ? "#4ade80" : TEXT_MUTED} />
             </TouchableOpacity>
           </View>
@@ -1423,7 +1423,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                     <TouchableOpacity
                       key={`recent-${i}-${emoji}`}
                       style={styles.emojiBtn}
-                      activeOpacity={0.8}
+                      activeOpacity={0.5}
                       onPress={() => handlePickEmoji(emoji)}
                     >
                       <Text style={styles.emojiText}>{emoji}</Text>
@@ -1440,7 +1440,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                         <TouchableOpacity
                           key={`${idx}-${colIdx}`}
                           style={styles.emojiBtn}
-                          activeOpacity={0.8}
+                          activeOpacity={0.5}
                           onPress={() => handlePickEmoji(emoji)}
                         >
                           <Text style={styles.emojiText}>{emoji}</Text>
@@ -1454,7 +1454,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                 <TouchableOpacity
                   style={[styles.emojiActionBtn, !text.trim() && styles.emojiActionBtnDisabled]}
                   onPress={() => text.trim() && handleSend()}
-                  activeOpacity={0.8}
+                  activeOpacity={0.5}
                   disabled={!text.trim()}
                 >
                   <Ionicons name="send" size={20} color={text.trim() ? "#4ade80" : TEXT_MUTED} />
@@ -1462,7 +1462,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                 <TouchableOpacity
                   style={styles.emojiActionBtn}
                   onPress={() => setText((prev) => prev.slice(0, -1))}
-                  activeOpacity={0.8}
+                  activeOpacity={0.5}
                 >
                   <Ionicons name="backspace-outline" size={20} color={TEXT_LIGHT} />
                 </TouchableOpacity>
@@ -1474,7 +1474,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
             <View style={styles.leftActions}>
               <TouchableOpacity
                 onPress={handleStartVoice}
-                activeOpacity={0.8}
+                activeOpacity={0.5}
                 disabled={isRecording}
               >
                 {isRecording ? (
@@ -1483,15 +1483,15 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                   <Ionicons name="mic" size={22} color="#60a5fa" />
                 )}
               </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.8} onPress={handleToggleEmoji}>
+              <TouchableOpacity activeOpacity={0.5} onPress={handleToggleEmoji}>
                 <Ionicons name="happy-outline" size={22} color={TEXT_MUTED} />
               </TouchableOpacity>
             </View>
             <View style={styles.rightActions}>
-              <TouchableOpacity activeOpacity={0.8} onPress={handlePickImage}>
+              <TouchableOpacity activeOpacity={0.5} onPress={handlePickImage}>
                 <Ionicons name="image-outline" size={22} color={TEXT_MUTED} />
               </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.8} onPress={handleOpenGiftModal}>
+              <TouchableOpacity activeOpacity={0.5} onPress={handleOpenGiftModal}>
                 <LottieView source={surpriseGiftAnim} autoPlay loop style={styles.giftIconAnim} />
               </TouchableOpacity>
             </View>
@@ -1539,7 +1539,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
         {quickGiftVisible && quickGiftKeyRef.current && (
           <View style={styles.quickGiftContainer}>
             <TouchableOpacity
-              activeOpacity={0.9}
+              activeOpacity={0.5}
               onPress={() => {
                 const key = quickGiftKeyRef.current;
                 if (!me?.id || !key) return;
@@ -1751,7 +1751,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                     setShowInsufficientBalanceModal(false);
                     onOpenTopup?.();
                   }}
-                  activeOpacity={0.85}
+                  activeOpacity={0.5}
                   style={styles.insufficientModalBtnWrap}
                 >
                   <LinearGradient
@@ -1767,7 +1767,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                 <TouchableOpacity
                   style={styles.insufficientModalCloseBtn}
                   onPress={() => setShowInsufficientBalanceModal(false)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.5}
                 >
                   <Text style={styles.insufficientModalCloseText}>{t("me.cancel")}</Text>
                 </TouchableOpacity>
@@ -1782,7 +1782,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                 <TouchableWithoutFeedback onPress={() => {}}>
                   <View style={styles.giftModal}>
                 <View style={styles.giftModalHeader}>
-                  <TouchableOpacity style={styles.giftGoldPill} activeOpacity={0.8}>
+                  <TouchableOpacity style={styles.giftGoldPill} activeOpacity={0.5}>
                     <View style={styles.giftGoldPillContent}>
                       <Text style={styles.goldCoinIcon}>🪙</Text>
                       <View>
@@ -1837,7 +1837,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
                       <Ionicons name="chevron-down" size={18} color={TEXT_LIGHT} />
                     </TouchableOpacity>
                   </View>
-                  <TouchableOpacity style={styles.giftSendBtn} onPress={handleSendGift} activeOpacity={0.8}>
+                  <TouchableOpacity style={styles.giftSendBtn} onPress={handleSendGift} activeOpacity={0.5}>
                     <Text style={styles.giftSendText}>{t("chat.send")}</Text>
                   </TouchableOpacity>
                 </View>
@@ -1855,7 +1855,7 @@ export default function ChatScreen({ me, other, onBack, onOpenMyProfile, onOpenO
               <Text style={styles.bonusModalEmoji}>🎉</Text>
               <Text style={styles.bonusModalTitle}>{t("chat.congratulations")}</Text>
               <Text style={styles.bonusModalText}>{t("chat.bonusReceived").replace("{amount}", String(bonusModal?.reward ?? 15))}</Text>
-              <TouchableOpacity style={styles.bonusModalBtn} onPress={() => setBonusModal(null)} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.bonusModalBtn} onPress={() => setBonusModal(null)} activeOpacity={0.5}>
                 <Text style={styles.bonusModalBtnText}>{t("chat.ok")}</Text>
               </TouchableOpacity>
             </View>
@@ -2408,15 +2408,15 @@ const styles = StyleSheet.create({
     fontSize: 26,
   },
   diceLottie: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
   },
   diceImage: {
-    width: 25,
-    height: 27,
+    width: 40,
+    height: 32,
   },
   rpsEmoji: {
-    fontSize: 32,
+    fontSize: 24,
   },
   specialHint: {
     fontSize: 10,

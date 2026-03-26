@@ -70,7 +70,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
       status === 503 ||
       status === 504;
     if (retries > 0 && isRetryable) {
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 1200));
       return withRetry(fn, retries - 1);
     }
     throw err;
@@ -388,7 +388,7 @@ export async function joinGroupChat(): Promise<boolean> {
 export async function getGroupChatVoiceToken(): Promise<{ token: string; wsUrl: string } | null> {
   try {
     const headers = await getAuthHeaders();
-    const res = await axios.get(`${API_BASE_URL}/api/group-chat/voice-token`, { headers, timeout: 8000 });
+    const res = await axios.get(`${API_BASE_URL}/api/group-chat/voice-token`, { headers, timeout: 5000 });
     if (res.data?.success && res.data?.token && res.data?.wsUrl) {
       return { token: res.data.token, wsUrl: res.data.wsUrl };
     }
@@ -438,11 +438,69 @@ export async function uploadGroupChatMusic(uri: string, filename?: string): Prom
   return null;
 }
 
+/** حالة الموسيقى المشتركة في الدردشة الجماعية */
+export type GroupChatMusicState = {
+  url: string | null;
+  isPlaying: boolean;
+  playlist: string[];
+  currentIndex: number;
+  volume: number;
+  updatedAt: number;
+};
+
+/** جلب حالة الموسيقى المشتركة */
+export async function getGroupChatMusicState(): Promise<GroupChatMusicState | null> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await axios.get(`${API_BASE_URL}/api/group-chat/music-state`, { headers, timeout: 3000 });
+    if (res.data?.success) {
+      return {
+        url: res.data.url ?? null,
+        isPlaying: !!res.data.isPlaying,
+        playlist: Array.isArray(res.data.playlist) ? res.data.playlist : [],
+        currentIndex: Number(res.data.currentIndex) || 0,
+        volume: Math.max(0, Math.min(1, Number(res.data.volume) ?? 1)),
+        updatedAt: Number(res.data.updatedAt) || 0,
+      };
+    }
+  } catch {
+    // الخادم قد لا يدعم هذا المسار بعد
+  }
+  return null;
+}
+
+/** التحكم بالموسيقى المشتركة */
+export async function groupChatMusicControl(
+  action: "play" | "stop" | "next" | "prev" | "volume",
+  options?: { url?: string; volume?: number }
+): Promise<GroupChatMusicState | null> {
+  try {
+    const headers = await getAuthHeaders();
+    const body: Record<string, unknown> = { action };
+    if (action === "play" && options?.url) body.url = options.url;
+    if (action === "volume" && typeof options?.volume === "number") body.volume = options.volume;
+    const res = await axios.post(`${API_BASE_URL}/api/group-chat/music-control`, body, { headers, timeout: 3000 });
+    if (res.data?.success) {
+      return {
+        url: res.data.url ?? null,
+        isPlaying: !!res.data.isPlaying,
+        playlist: Array.isArray(res.data.playlist) ? res.data.playlist : [],
+        currentIndex: Number(res.data.currentIndex) || 0,
+        volume: Math.max(0, Math.min(1, Number(res.data.volume) ?? 1)),
+        updatedAt: Number(res.data.updatedAt) || 0,
+      };
+    }
+  } catch (err) {
+    if (__DEV__) console.warn("groupChatMusicControl error:", err);
+  }
+  return null;
+}
+
 /** مغادرة غرفة الدردشة الجماعية */
 export async function leaveGroupChat(): Promise<boolean> {
   try {
     const headers = await getAuthHeaders();
-    await axios.post(`${API_BASE_URL}/api/group-chat/leave`, {}, { headers, timeout: 3000 });
+    await axios.post(`${API_BASE_URL}/api/group-chat/leave`, {}, { headers, timeout: 2000 });
     return true;
   } catch {
     return false;
@@ -466,7 +524,7 @@ export type GroupChatSlot = {
 export async function fetchGroupChatSlots(): Promise<GroupChatSlot[]> {
   try {
     const headers = await getAuthHeaders();
-    const res = await axios.get(`${API_BASE_URL}/api/group-chat/slots`, { headers, timeout: 5000 });
+    const res = await axios.get(`${API_BASE_URL}/api/group-chat/slots`, { headers, timeout: 4000 });
     if (res.data?.success && Array.isArray(res.data.slots)) {
       return res.data.slots as GroupChatSlot[];
     }
@@ -495,7 +553,7 @@ export async function setGroupChatSlot(slotIndex: number | null): Promise<GroupC
 export async function fetchGroupChatUsers(): Promise<GroupChatUser[]> {
   try {
     const headers = await getAuthHeaders();
-    const res = await axios.get(`${API_BASE_URL}/api/group-chat/users`, { headers, timeout: 5000 });
+    const res = await axios.get(`${API_BASE_URL}/api/group-chat/users`, { headers, timeout: 4000 });
     if (res.data?.success && Array.isArray(res.data.users)) {
       return res.data.users as GroupChatUser[];
     }
@@ -504,6 +562,8 @@ export async function fetchGroupChatUsers(): Promise<GroupChatUser[]> {
   }
   return [];
 }
+
+export type GiftRecipient = { userId: string; name: string; profileImage?: string | null };
 
 export type GroupChatMessage = {
   id: string;
@@ -515,6 +575,7 @@ export type GroupChatMessage = {
   fromDiamonds?: number;
   fromChargedGold?: number;
   toId?: string | null;
+  giftRecipients?: GiftRecipient[];
   text: string;
   createdAt: string;
   replyToText?: string | null;
@@ -551,8 +612,8 @@ export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
   try {
     const headers = await getAuthHeaders();
     const res = await withRetry(
-      () => axios.get(`${API_BASE_URL}/api/group-chat/messages?limit=250`, { headers, timeout: 12000 }),
-      4
+      () => axios.get(`${API_BASE_URL}/api/group-chat/messages?limit=250`, { headers, timeout: 10000 }),
+      2
     );
     if (res.data?.success && Array.isArray(res.data.messages)) {
       const msgs = (res.data.messages as GroupChatMessage[]).map((m) => ({
@@ -563,7 +624,7 @@ export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
       return msgs;
     }
   } catch (err) {
-    if (__DEV__) console.log("fetchGroupChatMessages error:", err);
+    if (__DEV__) console.log("fetchGroupChatMessages error:", err?.message || err);
   }
   const fallback = await getCachedGroupChatMessages();
   return fallback;
@@ -577,12 +638,13 @@ export async function sendGroupChatMessage(
     audioDurationSeconds?: number | null;
     imageUrl?: string | null;
     toId?: string | null;
+    toIds?: string[];
     giftAmount?: number | null;
     replyToText?: string | null;
     replyToFromId?: string | null;
     replyToFromName?: string | null;
   }
-): Promise<GroupChatMessage | null> {
+): Promise<GroupChatMessage | GroupChatMessage[] | null> {
   try {
     const headers = await getAuthHeaders();
     const res = await axios.post(
@@ -593,20 +655,45 @@ export async function sendGroupChatMessage(
         audioDurationSeconds: options?.audioDurationSeconds ?? null,
         imageUrl: options?.imageUrl ?? null,
         toId: options?.toId ?? null,
+        toIds: options?.toIds ?? null,
         giftAmount: options?.giftAmount ?? null,
         replyToText: options?.replyToText ?? null,
         replyToFromId: options?.replyToFromId ?? null,
         replyToFromName: options?.replyToFromName ?? null,
       },
-      { headers, timeout: 5000 }
+      { headers, timeout: 6000 }
     );
-    if (res.data?.success && res.data?.message) {
-      const m = res.data.message as GroupChatMessage;
-      return { ...m, id: String(m.id) };
+    if (res.data?.success) {
+      if (Array.isArray(res.data.messages)) {
+        return res.data.messages.map((m: GroupChatMessage) => ({ ...m, id: String(m.id) }));
+      }
+      if (res.data?.message) {
+        const m = res.data.message as GroupChatMessage;
+        return { ...m, id: String(m.id) };
+      }
     }
   } catch (err) {
     console.log("sendGroupChatMessage error:", err);
   }
   return null;
+}
+
+/** حذف رسالة من الدردشة الجماعية (للمرسل فقط) */
+export async function deleteGroupChatMessage(messageId: string): Promise<boolean> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await axios.delete(`${API_BASE_URL}/api/group-chat/messages/${messageId}`, {
+      headers,
+      timeout: 5000,
+    });
+    if (res.data?.success) {
+      const cached = getGroupChatMessagesCache().filter((m) => m.id !== messageId);
+      setGroupChatMessagesCache(cached);
+      return true;
+    }
+  } catch (err) {
+    if (__DEV__) console.log("deleteGroupChatMessage error:", err);
+  }
+  return false;
 }
 

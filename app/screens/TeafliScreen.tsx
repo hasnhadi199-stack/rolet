@@ -2406,15 +2406,15 @@ const styles = StyleSheet.create({
     fontSize: 26,
   },
   diceLottie: {
-    width: 40,
-    height: 40,
+    width: 58,
+    height: 58,
   },
   diceImage: {
-    width: 25,
-    height: 27,
+    width: 30,
+    height: 32,
   },
   rpsEmoji: {
-    fontSize: 32,
+    fontSize: 24,
   },
   specialHint: {
     fontSize: 10,

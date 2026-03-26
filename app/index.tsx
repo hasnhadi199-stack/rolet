@@ -24,8 +24,8 @@ import {
   LogBox,
 } from "react-native";
 
-// تثبيط خطأ "Unable to activate keep awake" في Expo Go — معروف ولا يؤثر على التشغيل
-LogBox.ignoreLogs(["keep awake"]);
+// تثبيط رسائل معروفة ولا تؤثر على التشغيل
+LogBox.ignoreLogs(["keep awake", "No compatible apps connected", "React Native DevTools"]);
 import { useFonts } from "expo-font";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import LottieView from "lottie-react-native";
@@ -699,6 +699,7 @@ export default function Page() {
   const [showTaskCenterPage, setShowTaskCenterPage] = useState(false);
   const [showDecorationsPage, setShowDecorationsPage] = useState(false);
   const [showGroupChatPage, setShowGroupChatPage] = useState(false);
+  const [returnToGroupChatAfterTopup, setReturnToGroupChatAfterTopup] = useState(false);
   const [showGroupChatUsersPage, setShowGroupChatUsersPage] = useState(false);
   const [showGroupChatMini, setShowGroupChatMini] = useState(false);
   const [userDismissedGroupChatMini, setUserDismissedGroupChatMini] = useState(false);
@@ -747,16 +748,26 @@ export default function Page() {
   const pinRefs = useRef<(TextInput | null)[]>([]);
 
   // ——— تحقق سريع من AsyncStorage أولاً — عرض التطبيق فوراً ———
+  // إعادة المحاولة بعد 400ms إذا فشل (AsyncStorage قد لا يكون جاهزاً فوراً عند التشغيل البارد)
   useEffect(() => {
-    checkAuthStatusQuick().then((r) => {
-      setAuthResult(r);
-      if (r.authenticated && r.user) {
-        setUser(r.user as User);
-        setAuthState("main");
-      } else {
-        setAuthState("email");
-      }
-    });
+    let cancelled = false;
+    const run = (retry = false) => {
+      checkAuthStatusQuick().then((r) => {
+        if (cancelled) return;
+        if (r.authenticated && r.user) {
+          setAuthResult(r);
+          setUser(r.user as User);
+          setAuthState("main");
+        } else if ((r.reason === "no_data" || r.reason === "error") && !retry) {
+          setTimeout(() => run(true), 400);
+        } else {
+          setAuthResult(r);
+          setAuthState("email");
+        }
+      });
+    };
+    run();
+    return () => { cancelled = true; };
   }, []);
 
   // ——— Splash قصير (0.4 ثانية) ثم اختفاء ———
@@ -874,7 +885,7 @@ export default function Page() {
   // ——— نبض عند وجود المربع المصغر — لإبقاء المستخدم في الغرفة حتى يُحدّث الباك اند lastSeen ———
   useEffect(() => {
     if (!showGroupChatMini || showGroupChatPage) return;
-    const t = setInterval(() => fetchGroupChatSlots().catch(() => {}), 2000);
+    const t = setInterval(() => fetchGroupChatSlots().catch(() => {}), 1200);
     return () => clearInterval(t);
   }, [showGroupChatMini, showGroupChatPage]);
 
@@ -1010,9 +1021,13 @@ export default function Page() {
           { timeout: 12000 }
         );
         if (res.data?.success && res.data.token && res.data.user) {
-          await AsyncStorage.setItem("token", res.data.token);
-          await AsyncStorage.setItem("user", JSON.stringify(res.data.user));
-          setUser(res.data.user);
+          const u = res.data.user;
+          await AsyncStorage.multiSet([
+            ["token", res.data.token],
+            ["user", JSON.stringify(u)],
+            ["userId", String(u?.id ?? "")],
+          ]);
+          setUser(u);
           preloadFromBackend();
           setAuthState("main");
         } else {
@@ -1281,7 +1296,16 @@ export default function Page() {
         <LanguageProvider>
         <>
           <AppAlertProvider>
-            <TopupScreen onBack={() => setShowTopupPage(false)} />
+            <TopupScreen
+              onBack={() => {
+                setShowTopupPage(false);
+                if (returnToGroupChatAfterTopup) {
+                  setReturnToGroupChatAfterTopup(false);
+                  setShowGroupChatPage(true);
+                  setShowGroupChatMini(false);
+                }
+              }}
+            />
           </AppAlertProvider>
           <CheckInContinuousModal visible onClose={() => {}} onOpenTaskCenter={openTaskCenter} onWalletUpdate={refreshUser} />
         </>
@@ -1562,6 +1586,7 @@ export default function Page() {
                   }}
                   onOpenTopup={() => {
                     setTabToReturnTo("messages");
+                    setReturnToGroupChatAfterTopup(true);
                     setShowGroupChatPage(false);
                     setShowTopupPage(true);
                   }}
@@ -1582,7 +1607,7 @@ export default function Page() {
             )}
             {showGroupChatUsersPage && (
               <View style={[StyleSheet.absoluteFill, { zIndex: 10000 }]}>
-                <GroupChatUsersScreen onBack={() => setShowGroupChatUsersPage(false)} />
+                <GroupChatUsersScreen onBack={() => setShowGroupChatUsersPage(false)} currentUserId={user?.id} />
               </View>
             )}
             {profileFromGroupChatUser && showGroupChatPage && user && (

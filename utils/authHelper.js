@@ -2,11 +2,23 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
 // يجب أن يتطابق مع عنوان الخادم. غيّره حسب بيئة التشغيل:
-// - Railway (إنتاج): "https://back-end-production-13d7.up.railway.app"
-// - محلي (نفق loca.lt): "https://myapi123.loca.lt"
+// - Scalingo (إنتاج): "https://hasnhadiabdali.osc-fr1.scalingo.io"
+// - محلي (Cloudflare): "https://xxx.trycloudflare.com"
+// - Railway (إنتاج): "https://web-production-3d324.up.railway.app"
 // - محلي (محاكي): "http://localhost:3000"
 // - أندرويد محاكي: "http://10.0.2.2:3000"
-export const API_BASE_URL = "https://back-end-production-13d7.up.railway.app";
+export const API_BASE_URL = "https://web-production-3d324.up.railway.app";
+
+// عند استخدام loca.lt — تجاوز صفحة "Click to Continue" حتى يعمل التطبيق على الجوال
+if (API_BASE_URL.includes("loca.lt")) {
+  axios.interceptors.request.use((config) => {
+    if (config.url && config.url.includes("loca.lt")) {
+      config.headers = config.headers || {};
+      config.headers["Bypass-Tunnel-Reminder"] = "yup";
+    }
+    return config;
+  });
+}
 
 /**
  * فك تشفير JWT token بدون مكتبة (للتحقق من انتهاء الصلاحية فقط)

@@ -87,7 +87,7 @@ export default function MessagesScreen({ onOpenChat, onOpenGroupChat }: Props) {
 
       {/* دردشة جماعية — صف شبيه بالرسائل الخاصة */}
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={0.5}
         onPress={onOpenGroupChat}
         disabled={!onOpenGroupChat}
         style={styles.row}
@@ -114,12 +114,12 @@ export default function MessagesScreen({ onOpenChat, onOpenGroupChat }: Props) {
       {items.length === 0 ? (
         <Text style={[styles.subtitle, { color: theme.textMuted }]}>{t("messages.empty")}</Text>
       ) : (
-        <ScrollView>
+        <ScrollView scrollEventThrottle={16}>
           {itemsWithOnline.map((m) => (
             <TouchableOpacity
               key={m.id}
               style={styles.row}
-              activeOpacity={0.8}
+              activeOpacity={0.5}
               onPress={() =>
                 onOpenChat({
                   id: m.otherId,

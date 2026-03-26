@@ -4,7 +4,9 @@
     "slug": "rolet",
     "backgroundColor": "#1a1625",
     "splash": {
-      "backgroundColor": "#1a1625"
+      "image": "./assets/images/taws.jpg",
+      "backgroundColor": "#1a1625",
+      "resizeMode": "contain"
     },
     "scheme": "rolet",
     "extra": {
@@ -15,6 +17,7 @@
     "owner": "hasn299",
     "android": {
       "package": "com.hasn299.rolet",
+      "jsEngine": "hermes",
       "softwareKeyboardLayoutMode": "resize",
       "permissions": ["android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"]
     },
@@ -27,6 +30,16 @@
       }
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          }
+        }
+      ],
       [
         "expo-font",
         {
