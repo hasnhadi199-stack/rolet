@@ -4,10 +4,10 @@ import axios from "axios";
 // يجب أن يتطابق مع عنوان الخادم. غيّره حسب بيئة التشغيل:
 // - Scalingo (إنتاج): "https://hasnhadiabdali.osc-fr1.scalingo.io"
 // - محلي (Cloudflare): "https://xxx.trycloudflare.com"
-// - Railway (إنتاج): "https://web-production-3d324.up.railway.app"
+// - Railway (إنتاج): "https://web-production-c85b1.up.railway.app"
 // - محلي (محاكي): "http://localhost:3000"
 // - أندرويد محاكي: "http://10.0.2.2:3000"
-export const API_BASE_URL = "https://web-production-3d324.up.railway.app";
+export const API_BASE_URL = "https://web-production-c85b1.up.railway.app";
 
 // عند استخدام loca.lt — تجاوز صفحة "Click to Continue" حتى يعمل التطبيق على الجوال
 if (API_BASE_URL.includes("loca.lt")) {
@@ -66,12 +66,13 @@ function validateStoredData(user) {
 /**
  * محاولة التحقق من السيرفر مع retry mechanism
  */
-async function verifyTokenWithServer(token, retries = 2) {
+async function verifyTokenWithServer(token, retries = 0) {
   for (let i = 0; i <= retries; i++) {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
-        timeout: 5000,
+        // أسرع: لا نريد أن يعلّق تسجيل الدخول على شبكة بطيئة
+        timeout: 2500,
       });
 
       if (res.data?.success && res.data?.user) {
@@ -81,12 +82,8 @@ async function verifyTokenWithServer(token, retries = 2) {
       const status = error?.response?.status;
       const isTimeout = error?.code === "ECONNABORTED" || status === 408;
 
-      // إذا كان timeout أو خطأ شبكة، نجرب مرة أخرى
-      if (i < retries && (isTimeout || status >= 500)) {
-        // انتظار متزايد (exponential backoff)
-        await new Promise((resolve) => setTimeout(resolve, (i + 1) * 1000));
-        continue;
-      }
+      // إذا كان timeout أو خطأ شبكة: لا نؤخر فتح التطبيق — نستخدم fallback مباشرة
+      if (i < retries && (isTimeout || status >= 500)) continue;
 
       // 401 أو 403 = توكن غير صالح
       if (status === 401 || status === 403) {
@@ -169,8 +166,8 @@ export async function checkAuthStatus() {
       return { authenticated: false, reason: "expired_token" };
     }
 
-    // محاولة التحقق من السيرفر
-    const serverCheck = await verifyTokenWithServer(token);
+    // محاولة التحقق من السيرفر (سريعة وبدون retries افتراضياً)
+    const serverCheck = await verifyTokenWithServer(token, 0);
 
     if (serverCheck.success) {
       // تحديث بيانات المستخدم إذا تغيرت

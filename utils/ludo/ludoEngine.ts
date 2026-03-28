@@ -5,7 +5,7 @@ const COLORS: LudoColor[] = ["red", "green", "yellow", "blue"];
 
 // Global track length
 const TRACK_LEN = 52;
-// Home stretch length (خطوات البيت 0..4 ثم إنهاء)
+// ممر البيت: 5 مربعات ملونة ثم المربع الأوسط (خطوات home: 0..4 ثم finished)
 const HOME_LEN = 6;
 
 // Safe squares (no capture) - common set; keep minimal
@@ -49,6 +49,7 @@ export function createInitialState(params: {
     players: pickedPlayers,
     tokens,
     turnPlayerId: turn,
+    sixStreak: 0,
     lastRoll: null,
     lastRollBy: null,
     canRoll: true,
@@ -118,6 +119,49 @@ function canEnterFromYard(roll: number): boolean {
   return roll === 6;
 }
 
+/** خطوة واحدة للأمام (للرسوم: مربع مربع) */
+function stepOnceForward(color: LudoColor, pos: TokenPos): TokenPos | null {
+  if (pos.kind === "finished") return null;
+  if (pos.kind === "yard") {
+    return { kind: "track", index: ENTRY_INDEX[color] };
+  }
+  if (pos.kind === "home") {
+    const ns = pos.step + 1;
+    if (ns > HOME_LEN - 1) return null;
+    if (ns === HOME_LEN - 1) return { kind: "finished" };
+    return { kind: "home", step: ns };
+  }
+  const progress = progressFromGlobal(color, pos.index);
+  const np = progress + 1;
+  if (np < TRACK_LEN) {
+    return { kind: "track", index: globalIndexForColorProgress(color, np) };
+  }
+  const homeStep = np - TRACK_LEN;
+  if (homeStep > HOME_LEN - 1) return null;
+  if (homeStep === HOME_LEN - 1) return { kind: "finished" };
+  return { kind: "home", step: homeStep };
+}
+
+/**
+ * كل موضع بعد كل نقطة من النرد (مثلاً 3 → 3 مواضع نهائية بعد كل خطوة).
+ * من البيت مع 6: قفزة واحدة إلى مربع الدخول.
+ */
+export function computeMoveWaypoints(color: LudoColor, from: TokenPos, roll: number): TokenPos[] {
+  if (from.kind === "yard") {
+    if (roll !== 6) return [];
+    return [{ kind: "track", index: ENTRY_INDEX[color] }];
+  }
+  const out: TokenPos[] = [];
+  let cur = from;
+  for (let i = 0; i < roll; i++) {
+    const n = stepOnceForward(color, cur);
+    if (!n) break;
+    out.push(n);
+    cur = n;
+  }
+  return out;
+}
+
 function computeMove(state: LudoState, playerId: string, token: LudoToken, roll: number): TokenPos | null {
   const pl = getPlayer(state, playerId);
   if (!pl) return null;
@@ -156,9 +200,11 @@ function computeMovableTokens(state: LudoState, playerId: string, roll: number):
   for (const t of toks) {
     const next = computeMove(state, playerId, t, roll);
     if (!next) continue;
-    // cannot land on your own token in home/track
+    // Allow stacking on your own token on the shared track (common Ludo rule),
+    // but still prevent landing on your own token in home stretch.
     const occupiedBySelf = toks.some((o) => o.id !== t.id && samePos(o.pos, next));
-    if (occupiedBySelf) continue;
+    // على المسار وفي الوسط: يُسمح بتكدس أكثر من قطعة لنفس اللاعب
+    if (occupiedBySelf && next.kind !== "track" && next.kind !== "finished") continue;
     ids.push(t.id);
   }
   return ids;
@@ -195,6 +241,7 @@ function applyMove(state: LudoState, playerId: string, tokenIdToMove: string, ro
     ...next,
     version: next.version + 1,
     turnPlayerId: nextTurn,
+    sixStreak: extraTurn ? state.sixStreak : 0,
     lastRoll: null,
     lastRollBy: null,
     canRoll: true,
@@ -207,10 +254,27 @@ function applyRoll(state: LudoState, fromId: string, roll: number): LudoState | 
   if (state.turnPlayerId !== fromId) return null;
   if (!state.canRoll) return null;
   const r = clampInt(roll, 1, 6);
+  const nextStreak = r === 6 ? (state.sixStreak ?? 0) + 1 : 0;
+  // 3 مرات 6 وراء بعض -> ينتهي الدور مباشرة وتنتقل للاعب التالي
+  if (r === 6 && nextStreak >= 3) {
+    const nextTurn = nextPlayerId(state, state.turnPlayerId);
+    return {
+      ...state,
+      version: state.version + 1,
+      turnPlayerId: nextTurn,
+      sixStreak: 0,
+      lastRoll: null,
+      lastRollBy: null,
+      canRoll: true,
+      movableTokenIds: [],
+      updatedAt: Date.now(),
+    };
+  }
   const movable = computeMovableTokens(state, fromId, r);
   return {
     ...state,
     version: state.version + 1,
+    sixStreak: nextStreak,
     lastRoll: r,
     lastRollBy: fromId,
     canRoll: movable.length === 0 ? true : false, // if no moves, allow roll again but we will advance turn below
@@ -228,6 +292,7 @@ function advanceIfNoMoves(state: LudoState): LudoState {
     ...state,
     version: state.version + 1,
     turnPlayerId: nextTurn,
+    sixStreak: 0,
     lastRoll: null,
     lastRollBy: null,
     canRoll: true,

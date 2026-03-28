@@ -54,6 +54,15 @@ async function getAuthHeaders() {
 }
 
 const API_TIMEOUT = 8000;
+let lastNetworkLogAt = 0;
+
+function shouldLogNetworkNow(): boolean {
+  const now = Date.now();
+  // منع سبام اللوج عند تكرار polling
+  if (now - lastNetworkLogAt < 15000) return false;
+  lastNetworkLogAt = now;
+  return true;
+}
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   try {
@@ -377,7 +386,8 @@ export async function deleteMessage(messageId: string): Promise<boolean> {
 export async function joinGroupChat(): Promise<boolean> {
   try {
     const headers = await getAuthHeaders();
-    const res = await axios.post(`${API_BASE_URL}/api/group-chat/join`, {}, { headers, timeout: 5000 });
+    // سريع: لا نعلّق فتح الدردشة على شبكة بطيئة
+    const res = await axios.post(`${API_BASE_URL}/api/group-chat/join`, {}, { headers, timeout: 2500 });
     return res.data?.success === true;
   } catch {
     return false;
@@ -524,7 +534,7 @@ export type GroupChatSlot = {
 export async function fetchGroupChatSlots(): Promise<GroupChatSlot[]> {
   try {
     const headers = await getAuthHeaders();
-    const res = await axios.get(`${API_BASE_URL}/api/group-chat/slots`, { headers, timeout: 4000 });
+    const res = await axios.get(`${API_BASE_URL}/api/group-chat/slots`, { headers, timeout: 2500 });
     if (res.data?.success && Array.isArray(res.data.slots)) {
       return res.data.slots as GroupChatSlot[];
     }
@@ -543,8 +553,12 @@ export async function setGroupChatSlot(slotIndex: number | null): Promise<GroupC
     if (res.data?.success && Array.isArray(res.data.slots)) {
       return res.data.slots as GroupChatSlot[];
     }
-  } catch (err) {
-    console.log("setGroupChatSlot error:", err);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    // لا تسبّب سبام في الكونسول عند انقطاع الشبكة
+    if (__DEV__ && !/Network Error|timeout|ECONNABORTED|ERR_NETWORK/i.test(String(msg))) {
+      console.log("setGroupChatSlot error:", err);
+    }
   }
   return null;
 }
@@ -553,7 +567,7 @@ export async function setGroupChatSlot(slotIndex: number | null): Promise<GroupC
 export async function fetchGroupChatUsers(): Promise<GroupChatUser[]> {
   try {
     const headers = await getAuthHeaders();
-    const res = await axios.get(`${API_BASE_URL}/api/group-chat/users`, { headers, timeout: 4000 });
+    const res = await axios.get(`${API_BASE_URL}/api/group-chat/users`, { headers, timeout: 2500 });
     if (res.data?.success && Array.isArray(res.data.users)) {
       return res.data.users as GroupChatUser[];
     }
@@ -611,10 +625,8 @@ export async function getCachedGroupChatMessages(): Promise<GroupChatMessage[]> 
 export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
   try {
     const headers = await getAuthHeaders();
-    const res = await withRetry(
-      () => axios.get(`${API_BASE_URL}/api/group-chat/messages?limit=250`, { headers, timeout: 10000 }),
-      2
-    );
+    // سريع: بدون retry هنا، نستخدم cache إذا فشل
+    const res = await axios.get(`${API_BASE_URL}/api/group-chat/messages?limit=250`, { headers, timeout: 4000 });
     if (res.data?.success && Array.isArray(res.data.messages)) {
       const msgs = (res.data.messages as GroupChatMessage[]).map((m) => ({
         ...m,
@@ -624,7 +636,10 @@ export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
       return msgs;
     }
   } catch (err) {
-    if (__DEV__) console.log("fetchGroupChatMessages error:", err?.message || err);
+    const msg = (err as any)?.message || "";
+    if (__DEV__ && shouldLogNetworkNow() && !/Network Error|timeout|ECONNABORTED|ERR_NETWORK/i.test(String(msg))) {
+      console.log("fetchGroupChatMessages error:", msg || err);
+    }
   }
   const fallback = await getCachedGroupChatMessages();
   return fallback;

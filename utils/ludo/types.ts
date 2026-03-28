@@ -11,7 +11,7 @@ export type LudoPlayer = {
  * Token position model:
  * - "yard": at home/yard, not entered
  * - "track": on shared outer track, index 0..51 (relative to global track)
- * - "home": in final home stretch, step 0..5 (0 is first home cell, 5 is finish)
+ * - "home": in final home stretch, step 0..4 (5 مربعات ملونة ثم الانتقال إلى finished)
  * - "finished": reached finish
  */
 export type TokenPos =
@@ -33,6 +33,8 @@ export type LudoState = {
   players: LudoPlayer[]; // 2-4
   tokens: LudoToken[]; // 16 max
   turnPlayerId: string;
+  /** عدد مرات رمي 6 المتتالية لنفس اللاعب داخل نفس الدور */
+  sixStreak: number;
   lastRoll: number | null;
   lastRollBy: string | null;
   canRoll: boolean;

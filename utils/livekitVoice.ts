@@ -88,8 +88,8 @@ export function subscribeToLocalAudio(cb: (audioLevel: number, isSpeaking: boole
     return () => {};
   }
   /** تقليل إعادة رسم الشاشة: كان 48ms ≈ 21 مرة/ثانية */
-  const POLL_MS = 160;
-  const MIN_EMIT_MS = 100;
+  const POLL_MS = 200;
+  const MIN_EMIT_MS = 160;
   let lastLevel = -1;
   let lastSpeaking = false;
   let lastEmitAt = 0;

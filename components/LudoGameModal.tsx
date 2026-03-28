@@ -32,6 +32,7 @@ function emptySlots(me: PlayerLite): (PlayerLite | null)[] {
 export default function LudoGameModal({ visible, onClose, me, candidates, sessionId = "group-chat-room" }: Props) {
   const [phase, setPhase] = useState<"lobby" | "play">("lobby");
   const [gameKey, setGameKey] = useState(0);
+  const [hasStarted, setHasStarted] = useState(false);
   const [slots, setSlots] = useState<(PlayerLite | null)[]>(() => emptySlots(me));
   /** عند الضغط على + نفتح اختيار من يملأ هذه الخانة (1–3) */
   const [pickSlotIndex, setPickSlotIndex] = useState<number | null>(null);
@@ -45,6 +46,8 @@ export default function LudoGameModal({ visible, onClose, me, candidates, sessio
     if (!visible) {
       setFarewell(false);
       setPhase("lobby");
+      setHasStarted(false);
+      setGameKey((k) => k + 1); // reset فقط عند الإغلاق
       fade.setValue(0);
       scale.setValue(0.92);
     }
@@ -93,8 +96,8 @@ export default function LudoGameModal({ visible, onClose, me, candidates, sessio
   const startGame = useCallback(() => {
     const pl = slots.filter((x): x is PlayerLite => x != null);
     if (pl.length < 2) return;
-    setGameKey((k) => k + 1);
     setPhase("play");
+    setHasStarted(true);
   }, [slots]);
 
   const toggleChip = useCallback(
@@ -195,29 +198,27 @@ export default function LudoGameModal({ visible, onClose, me, candidates, sessio
               </View>
               ) : null}
 
-              {phase === "play" ? (
-                <LinearGradient
-                  colors={["#ede9fe", "#e0e7ff", "#dbeafe", "#fae8ff"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.sheetPlayGradient}
-                >
-                <ScrollView
-                  style={styles.gameScroll}
-                  contentContainerStyle={styles.gameScrollContent}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                >
-                  <LudoBoardPanel
-                    key={gameKey}
-                    sessionId={sessionId}
-                    me={me}
-                    players={lobbyPlayers}
-                    onBackToLobby={() => setPhase("lobby")}
-                  />
-                </ScrollView>
-                </LinearGradient>
-              ) : (
+              {/* اللعب يبقى مركّب (لا reset) — نخفي/نُظهر فقط */}
+              {hasStarted ? (
+                <View style={[styles.sheetPlayGradient, phase !== "play" && styles.hidden]}>
+                  <ScrollView
+                    style={styles.gameScroll}
+                    contentContainerStyle={styles.gameScrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    <LudoBoardPanel
+                      key={gameKey}
+                      sessionId={sessionId}
+                      me={me}
+                      players={lobbyPlayers}
+                      onBackToLobby={() => setPhase("lobby")}
+                    />
+                  </ScrollView>
+                </View>
+              ) : null}
+
+              {phase !== "play" ? (
               <View style={styles.card}>
           <Text style={styles.sectionTitle}>اختر اللاعبين</Text>
 
@@ -328,7 +329,7 @@ export default function LudoGameModal({ visible, onClose, me, candidates, sessio
             </Modal>
           ) : null}
               </View>
-              )}
+              ) : null}
             </View>
       </View>
     </Modal>
@@ -408,6 +409,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minHeight: 420,
   },
+  hidden: { display: "none" },
   gameScroll: { maxHeight: Dimensions.get("window").height * 0.78 },
   gameScrollContent: { paddingBottom: 16, alignItems: "center" },
   sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },

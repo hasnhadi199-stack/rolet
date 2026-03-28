@@ -74,8 +74,7 @@ export const TRACK_CELLS: readonly Cell[] = [
 ];
 
 export const HOME_CELLS: Record<LudoColor, readonly Cell[]> = {
-  // 5 خلايا "بيت" قبل الإنهاء (finish)
-  // مطابق للصورة: أخضر فوق (عمود)، أزرق تحت (عمود)، أحمر يسار (صف)، أصفر يمين (صف)
+  // 5 مربعات ملونة نحو المركز ثم الإنهاء في وسط الـ X (مثل اللودو الكلاسيكي)
   green: [
     [1, 7],
     [2, 7],
@@ -220,11 +219,51 @@ export function yardSlotXY(color: LudoColor, slot: number): { x: number; y: numb
   return { x: origin.ox + xInQuad, y: origin.oy + yInQuad };
 }
 
-/** المسار المنزلي (5 خطوات قبل الإنهاء) — على استقامة من زاوية اللون نحو المركز */
+/** المسار المنزلي (5 مربعات قبل الإنهاء) — على استقامة من زاوية اللون نحو المركز */
 export function homeStepXY(color: LudoColor, step: number): { x: number; y: number } {
   const s = Math.max(0, Math.min(4, Math.floor(step)));
   const cell = HOME_CELLS[color][s] ?? HOME_CELLS[color][0]!;
   return cellToXY(cell);
+}
+
+/**
+ * ثلاث خلايا لكل ربع ملون حول المنتصف — متوسطها ≈ وسط المثلث (أحمر في وسط الأحمر، أزرق في وسط الأزرق، …)
+ * وليس وسط المربع الأبيض [7,7].
+ */
+const FINISH_WEDGE_CELLS: Record<LudoColor, readonly Cell[]> = {
+  green: [
+    [5, 8],
+    [6, 7],
+    [7, 6],
+  ],
+  yellow: [
+    [6, 8],
+    [6, 7],
+    [7, 8],
+  ],
+  blue: [
+    [8, 8],
+    [8, 7],
+    [7, 8],
+  ],
+  red: [
+    [6, 5],
+    [7, 6],
+    [8, 7],
+  ],
+};
+
+export function finishAnchorXY(color: LudoColor): { x: number; y: number } {
+  const cells = FINISH_WEDGE_CELLS[color];
+  let sx = 0;
+  let sy = 0;
+  for (const c of cells) {
+    const p = cellToXY(c);
+    sx += p.x;
+    sy += p.y;
+  }
+  const n = cells.length;
+  return { x: sx / n, y: sy / n };
 }
 
 export const COLOR_HEX: Record<LudoColor, string> = {

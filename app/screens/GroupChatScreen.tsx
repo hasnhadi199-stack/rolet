@@ -726,6 +726,8 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
   const bubbleRefs = useRef<Record<string, View | null>>({});
   const [replyTo, setReplyTo] = useState<{ replyToText: string; replyToFromId: string; replyToFromName: string } | null>(null);
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
+  const failedIdsRef = useRef(failedIds);
+  failedIdsRef.current = failedIds;
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [selectedGiftIndex, setSelectedGiftIndex] = useState(0);
@@ -735,6 +737,8 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
   const [freeGold, setFreeGold] = useState(0);
   const [showInsufficientBalanceModal, setShowInsufficientBalanceModal] = useState(false);
   const [roomUsers, setRoomUsers] = useState<GroupChatUser[]>([]);
+  const roomUsersRef = useRef(roomUsers);
+  roomUsersRef.current = roomUsers;
   const [showGiftRecipientBar, setShowGiftRecipientBar] = useState(false);
   const [giftAllSelected, setGiftAllSelected] = useState(true);
   const [giftSelectedUserIds, setGiftSelectedUserIds] = useState<string[]>([]);
@@ -743,6 +747,8 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
   const [giftOverlayType, setGiftOverlayType] = useState<"peacock" | "dragon" | "space" | "love" | "bird" | "ghost" | "rose" | "flower" | null>(null);
   const [showGiftOverlay, setShowGiftOverlay] = useState(false);
   const flatRef = useRef<FlatList>(null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const inputRef = useRef<TextInput>(null);
   const initialScrollDone = useRef(false);
   const liveKitDisconnectRef = useRef<(() => void) | null>(null);
@@ -754,6 +760,9 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
   const joinToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shownJoinIdsRef = useRef<Set<string>>(new Set());
   const joinExpireTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const loadingMessagesRef = useRef(false);
+  const loadingUsersSlotsRef = useRef(false);
+  const lastUsersSlotsSigRef = useRef<string>("");
 
   const showJoinToast = useCallback((name: string, isMe: boolean) => {
     const n = (name || "").trim() || "مستخدم";
@@ -879,15 +888,42 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
 
   const failedIdsExtra = useMemo(() => Array.from(failedIds).sort().join(","), [failedIds]);
 
-  const userIdToProfileImageMap = useMemo(() => {
-    const map: Record<string, string> = {};
+  /** توقيع ثابت لصور المرسلين — عند تطابقه لا نُعيد كائن الخريطة فيبقى renderItem مستقرًا وmemo القائمة يعمل */
+  const profileImageUrlsSig = useMemo(() => {
     const slice = messages.length > 100 ? messages.slice(-100) : messages;
+    const pairs: string[] = [];
+    const seen = new Set<string>();
+    for (const m of slice) {
+      if (m.fromId && m.fromProfileImage && !seen.has(m.fromId)) {
+        seen.add(m.fromId);
+        pairs.push(`${m.fromId}\0${getImageUrl(m.fromProfileImage)}`);
+      }
+    }
+    pairs.sort();
+    return pairs.join("\x01");
+  }, [messages]);
+
+  const userIdToProfileImageMap = useMemo(() => {
+    const list = messagesRef.current;
+    const map: Record<string, string> = {};
+    const slice = list.length > 100 ? list.slice(-100) : list;
     for (const m of slice) {
       if (m.fromId && m.fromProfileImage && !map[m.fromId]) {
         map[m.fromId] = getImageUrl(m.fromProfileImage);
       }
     }
     return map;
+  }, [profileImageUrlsSig]);
+
+  const joinTailIdsSig = useMemo(() => {
+    const parts: string[] = [];
+    for (let i = Math.max(0, messages.length - 20); i < messages.length; i++) {
+      const m = messages[i];
+      if (!m) continue;
+      if ((m.text || "").trim() !== "__join__") continue;
+      parts.push(String(m.id));
+    }
+    return parts.join(",");
   }, [messages]);
 
   useEffect(() => {
@@ -902,73 +938,104 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
   const mapMsgs = useCallback((arr: GroupChatMessage[]) => arr.map((m) => mapToLocalMsg(m)), []);
 
   const loadMessages = useCallback((silent = false) => {
+    if (loadingMessagesRef.current) return;
+    loadingMessagesRef.current = true;
     if (!silent) setLoading(true);
-    setMessages((prev) => {
-      const memCached = mapMsgs(getGroupChatMessagesCache());
-      if (memCached.length === 0) return prev;
+
+    const mergePending = (
+      prev: LocalGroupMsg[],
+      mapped: LocalGroupMsg[]
+    ): LocalGroupMsg[] => {
       const pending = prev.filter((m) => String(m.id).startsWith("temp_"));
-      if (pending.length === 0) return memCached;
-      const cacheIds = new Set(memCached.map((x) => x.id));
-      const toAdd = pending.filter((p) => !cacheIds.has(p.id));
-      return toAdd.length > 0 ? [...memCached, ...toAdd] : memCached;
-    });
-    getCachedGroupChatMessages().then((stored) => {
-      if (stored.length > 0) {
+      if (pending.length === 0) return mapped;
+      const serverIds = new Set(mapped.map((x) => x.id));
+      const toAdd = pending.filter((p) => !serverIds.has(p.id));
+      return toAdd.length > 0 ? [...mapped, ...toAdd] : mapped;
+    };
+
+    const sameByIdSig = (prev: LocalGroupMsg[], next: LocalGroupMsg[]) => {
+      if (prev.length !== next.length) return false;
+      const sig = next.map((m) => m.id).join("\u001e");
+      return prev.map((m) => m.id).join("\u001e") === sig;
+    };
+
+    if (!silent) {
+      setMessages((prev) => {
+        const memCached = mapMsgs(getGroupChatMessagesCache());
+        if (memCached.length === 0) return prev;
+        const merged = mergePending(prev, memCached);
+        return sameByIdSig(prev, merged) ? prev : merged;
+      });
+      getCachedGroupChatMessages().then((stored) => {
+        if (stored.length === 0) return;
         setMessages((prev) => {
           const mapped = mapMsgs(stored);
+          const merged = mergePending(prev, mapped);
+          return sameByIdSig(prev, merged) ? prev : merged;
+        });
+      });
+    }
+
+    void fetchGroupChatMessages()
+      .then((msgs) => {
+        const mapped = mapMsgs(msgs);
+        const sig = mapped.map((m) => m.id).join("\u001e");
+        setMessages((prev) => {
           const pending = prev.filter((m) => String(m.id).startsWith("temp_"));
-          if (pending.length === 0) return mapped;
+          if (pending.length === 0) {
+            const prevSig = prev.map((m) => m.id).join("\u001e");
+            if (prevSig === sig && prev.length === mapped.length) return prev;
+            return mapped;
+          }
           const serverIds = new Set(mapped.map((x) => x.id));
           const toAdd = pending.filter((p) => !serverIds.has(p.id));
           return toAdd.length > 0 ? [...mapped, ...toAdd] : mapped;
         });
-      }
-    });
-    void fetchGroupChatMessages().then((msgs) => {
-      const mapped = mapMsgs(msgs);
-      const sig = mapped.map((m) => m.id).join("\u001e");
-      setMessages((prev) => {
-        const pending = prev.filter((m) => String(m.id).startsWith("temp_"));
-        if (pending.length === 0) {
-          const prevSig = prev.map((m) => m.id).join("\u001e");
-          if (prevSig === sig && prev.length === mapped.length) return prev;
-          return mapped;
-        }
-        const serverIds = new Set(mapped.map((x) => x.id));
-        const toAdd = pending.filter((p) => !serverIds.has(p.id));
-        return toAdd.length > 0 ? [...mapped, ...toAdd] : mapped;
+        setGroupChatMessagesCache(msgs);
+      })
+      .finally(() => {
+        loadingMessagesRef.current = false;
+        setLoading(false);
       });
-      setGroupChatMessagesCache(msgs);
-    }).finally(() => setLoading(false));
   }, [mapMsgs]);
 
   const fetchUsersAndSlots = useCallback(() => {
+    if (loadingUsersSlotsRef.current) return;
+    loadingUsersSlotsRef.current = true;
     Promise.all([fetchGroupChatUsers(), fetchGroupChatSlots()]).then(([users, slots]) => {
       const validSlots = slots.filter((s): s is NonNullable<typeof s> => s != null);
-      setGiftSlots(validSlots);
-      setVoiceSlots(slots);
-      setRoomUsers((prev) => {
-        const merged =
-          prev.length === 0
-            ? users.slice(0, 100)
-            : (() => {
-                const prevIds = new Set(prev.map((u) => u.userId));
-                const currentIds = new Set(users.map((u) => u.userId));
-                const newUsers = users.filter((u) => !prevIds.has(u.userId));
-                const existing = prev.filter((p) => currentIds.has(p.userId));
-                return [...newUsers, ...existing].slice(0, 100);
-              })();
-        const slotOrder = validSlots.map((s) => s.userId);
-        const slotSet = new Set(slotOrder);
-        const inSlots = merged.filter((u) => slotSet.has(u.userId));
-        const notInSlots = merged.filter((u) => !slotSet.has(u.userId));
-        const sortedInSlots = [...inSlots].sort((a, b) => {
-          const ai = slotOrder.indexOf(a.userId);
-          const bi = slotOrder.indexOf(b.userId);
-          return ai - bi;
-        });
-        return [...sortedInSlots, ...notInSlots];
+      const slotSig = slots.map((s) => s?.userId ?? "").join("\u001e");
+      const prev = roomUsersRef.current;
+      const merged =
+        prev.length === 0
+          ? users.slice(0, 100)
+          : (() => {
+              const prevIds = new Set(prev.map((u) => u.userId));
+              const currentIds = new Set(users.map((u) => u.userId));
+              const newUsers = users.filter((u) => !prevIds.has(u.userId));
+              const existing = prev.filter((p) => currentIds.has(p.userId));
+              return [...newUsers, ...existing].slice(0, 100);
+            })();
+      const slotOrder = validSlots.map((s) => s.userId);
+      const slotSet = new Set(slotOrder);
+      const inSlots = merged.filter((u) => slotSet.has(u.userId));
+      const notInSlots = merged.filter((u) => !slotSet.has(u.userId));
+      const sortedInSlots = [...inSlots].sort((a, b) => {
+        const ai = slotOrder.indexOf(a.userId);
+        const bi = slotOrder.indexOf(b.userId);
+        return ai - bi;
       });
+      const nextList = [...sortedInSlots, ...notInSlots];
+      const listSig = nextList.map((u) => u.userId).join("\u001e");
+      const fullSig = `${slotSig}\n${listSig}`;
+      if (fullSig !== lastUsersSlotsSigRef.current) {
+        lastUsersSlotsSigRef.current = fullSig;
+        setGiftSlots(validSlots);
+        setVoiceSlots(slots);
+        setRoomUsers(nextList);
+      }
+    }).finally(() => {
+      loadingUsersSlotsRef.current = false;
     });
   }, []);
 
@@ -1010,13 +1077,14 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
       if (isMe) continue;
       showJoinToast(name, false);
     }
-  }, [messages, currentUserId, showJoinToast]);
+  }, [joinTailIdsSig, currentUserId, showJoinToast]);
 
   useEffect(() => {
     // حذف رسالة "زائر قادم ... تحيه" بعد 10 ثواني من ظهورها
+    const list = messagesRef.current;
     const now = Date.now();
-    for (let i = Math.max(0, messages.length - 20); i < messages.length; i++) {
-      const m = messages[i];
+    for (let i = Math.max(0, list.length - 20); i < list.length; i++) {
+      const m = list[i];
       if (!m) continue;
       if ((m.text || "").trim() !== "__join__") continue;
       const id = String(m.id || "");
@@ -1034,7 +1102,7 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
       }, delay);
     }
     return () => {};
-  }, [messages]);
+  }, [joinTailIdsSig]);
 
   useEffect(() => {
     return () => {
@@ -1068,15 +1136,15 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
     loadMessages(true);
   }, [loadMessages, mapMsgs]);
 
-  /** تحديث الرسائل: كان 600ms ويثقل الشبكة وإعادة الرسم — ~2.5 ثانية كافية */
+  /** تحديث الرسائل: استطلاع أبطأ قليلًا يقلل إعادة الرسم والضغط عند نشاط عالٍ */
   useEffect(() => {
-    const t = setInterval(() => loadMessages(true), 2500);
+    const t = setInterval(() => loadMessages(true), 5200);
     return () => clearInterval(t);
   }, [loadMessages]);
 
-  /** مستخدمون ومقاعد: ~2 ثانية بدل 500–600ms */
+  /** مستخدمون ومقاعد */
   useEffect(() => {
-    const interval = showGiftModal ? 1800 : 2200;
+    const interval = showGiftModal ? 3000 : 4500;
     const t = setInterval(fetchUsersAndSlots, interval);
     return () => clearInterval(t);
   }, [showGiftModal, fetchUsersAndSlots]);
@@ -1322,7 +1390,7 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
     const spin = (step: number) => {
       if (step < totalSteps) {
         setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: variants[step % variants.length] } : m)));
-        setTimeout(() => spin(step + 1), 55);
+        setTimeout(() => spin(step + 1), 88);
       } else {
         const final = variants[finalIndex];
         setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: final, specialAnimating: false } : m)));
@@ -1592,38 +1660,43 @@ export default function GroupChatScreen({ user, onBack, onOpenUsers, onOpenProfi
 
   const avatarSize = expanded ? (SCREEN_WIDTH - 32 - AVATAR_GAP * (AVATAR_COLS + 1)) / AVATAR_COLS : 32;
 
-  const renderGroupItem = useCallback(({ item }: { item: LocalGroupMsg }) => (
-    <GroupChatMessageItem
-      item={item}
-      isMe={item.fromId === currentUserId}
-      hasFailed={failedIds.has(item.id)}
-      diceFinalValuesRef={diceFinalValuesRef}
-      onMention={handleMention}
-      onDiceAnimEnd={handleDiceAnimEnd}
-      onBubbleLongPress={handleBubbleLongPress}
-      onRetry={handleRetrySend}
-      onPreviewImage={setPreviewImage}
-      onOpenProfile={onOpenProfile}
-      onSendWelcome={sendWelcome}
-      userIdToProfileImageMap={userIdToProfileImageMap}
-      bubbleRefs={bubbleRefs}
-      styles={styles}
-      onPlayGift={(giftType) => {
-        setGiftOverlayType(giftType as typeof giftOverlayType);
-        setShowGiftOverlay(true);
-      }}
-    />
-  ), [
-    currentUserId,
-    failedIds,
-    handleMention,
-    handleDiceAnimEnd,
-    handleBubbleLongPress,
-    handleRetrySend,
-    onOpenProfile,
-    sendWelcome,
-    userIdToProfileImageMap,
-  ]);
+  const onPlayGift = useCallback((giftType: string) => {
+    setGiftOverlayType(giftType as typeof giftOverlayType);
+    setShowGiftOverlay(true);
+  }, []);
+
+  const renderGroupItem = useCallback(
+    ({ item }: { item: LocalGroupMsg }) => (
+      <GroupChatMessageItem
+        item={item}
+        isMe={item.fromId === currentUserId}
+        hasFailed={failedIdsRef.current.has(item.id)}
+        diceFinalValuesRef={diceFinalValuesRef}
+        onMention={handleMention}
+        onDiceAnimEnd={handleDiceAnimEnd}
+        onBubbleLongPress={handleBubbleLongPress}
+        onRetry={handleRetrySend}
+        onPreviewImage={setPreviewImage}
+        onOpenProfile={onOpenProfile}
+        onSendWelcome={sendWelcome}
+        userIdToProfileImageMap={userIdToProfileImageMap}
+        bubbleRefs={bubbleRefs}
+        styles={styles}
+        onPlayGift={onPlayGift}
+      />
+    ),
+    [
+      currentUserId,
+      handleMention,
+      handleDiceAnimEnd,
+      handleBubbleLongPress,
+      handleRetrySend,
+      onOpenProfile,
+      sendWelcome,
+      userIdToProfileImageMap,
+      onPlayGift,
+    ]
+  );
 
   if (showMusicPage) {
     return (
